@@ -2,19 +2,18 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../config/firebase";
-// Asegúrate de que la imagen en tu carpeta assets se llame exactamente "buho.png"
-// (o cámbiale el nombre aquí si la guardaste como "buoh-cesba-953x1024.png")
-import logo from '../assets/buho.png'; 
+// Asegúrate de que la imagen en tu carpeta assets se llame exactamente "assets_buho.png"
+import logo from '../assets/assets_buho.png'; 
 
 export default function Sidebar() {
 const navigate = useNavigate();
 const location = useLocation();
 
+// ELIMINAMOS LA OPCIÓN DE QR DE ESTE MENÚ
 const menuItems = [
 { name: "Dashboard", path: "/dashboard", icon: "📊" },
 { name: "Inventario", path: "/inventario", icon: "📦" },
 { name: "Usuarios", path: "/usuarios", icon: "👥" },
-{ name: "Generar QR", path: "/qr", icon: "🔳" },
 ];
 
 const handleLogout = () => signOut(auth).then(() => navigate("/"));

@@ -61,7 +61,7 @@ try {
     const equipoRef = doc(db, "Equipos", equipo.id);
     await updateDoc(equipoRef, {
     estado: nuevoEstado,
-    usuarioActual: esDisponible ? "Usuario Web" : "", 
+    usuarioActual: userData?.nombre || "Usuario Web", 
     });
 
     await addDoc(collection(db, "Historial"), {
@@ -113,7 +113,7 @@ try {
     const equipoRef = doc(db, "Equipos", equipo.id);
     await updateDoc(equipoRef, {
     estado: "Fuera de Servicio",
-    usuarioActual: "Ninguno", 
+    usuarioActual: userData?.nombre || "Usuario Web", 
     });
 
     await addDoc(collection(db, "Historial"), {
@@ -133,7 +133,7 @@ try {
 };
 
 // ==========================================
-// 4. NUEVO: FUNCIÓN PARA REACTIVAR EQUIPO (Reparado)
+// 4. FUNCIÓN PARA REACTIVAR EQUIPO (Reparado)
 // ==========================================
 const handleRestoreEquipment = async (equipo) => {
 const { value: motivo, isConfirmed } = await Swal.fire({
@@ -155,12 +155,12 @@ const { value: motivo, isConfirmed } = await Swal.fire({
 if (!isConfirmed) return;
 
 try {
-    // Lo regresamos a estado "Disponible" y le quitamos cualquier usuario asignado
     const equipoRef = doc(db, "Equipos", equipo.id);
     await updateDoc(equipoRef, {
     estado: "Disponible",
-    usuarioActual: "", 
-    });
+    usuarioActual: userData?.nombre || "Usuario Web", 
+    }); 
+    
 
     await addDoc(collection(db, "Historial"), {
     idEquipo: equipo.id,
@@ -179,7 +179,27 @@ try {
 };
 
 // ==========================================
-// 5. EXPORTAR EL HISTORIAL CON FILTRO DE FECHA
+// 5. NUEVO: FUNCIÓN PARA GENERAR QR EN PANTALLA
+// ==========================================
+const handleGenerateQR = (equipo) => {
+// Usamos una API gratuita y rápida para generar el QR basado en el ID del equipo
+const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${equipo.id}`;
+
+Swal.fire({
+    title: `QR del Equipo`,
+    html: `<b>${equipo.nombre}</b><br/><small>ID: ${equipo.id}</small>`,
+    imageUrl: qrUrl,
+    imageWidth: 200,
+    imageHeight: 200,
+    imageAlt: `Código QR de ${equipo.id}`,
+    confirmButtonColor: '#FF6F00',
+    confirmButtonText: 'Cerrar',
+    footer: '<span style="color: gray; font-size: 13px;">Puedes escanear este código desde la App Móvil</span>'
+});
+};
+
+// ==========================================
+// 6. EXPORTAR EL HISTORIAL CON FILTRO DE FECHA
 // ==========================================
 const exportHistoryToExcel = async () => {
 try {
@@ -238,7 +258,7 @@ try {
 };
 
 // ==========================================
-// 6. FUNCIÓN PARA EXPORTAR LA VISTA ACTUAL A PDF
+// 7. FUNCIÓN PARA EXPORTAR LA VISTA ACTUAL A PDF
 // ==========================================
 const exportToPDF = () => {
 const doc = new jsPDF();
@@ -307,6 +327,8 @@ return (
             <th style={styles.th}>NOMBRE / MODELO</th>
             <th style={styles.th}>ESTADO</th>
             <th style={styles.th}>ÚLTIMO USUARIO</th>
+            {/* --- NUEVA COLUMNA DE QR --- */}
+            <th style={{ ...styles.th, textAlign: "center" }}>QR</th>
             <th style={{ ...styles.th, textAlign: "center" }}>ACCIONES</th>
             </tr>
         </thead>
@@ -332,7 +354,18 @@ return (
                 </td>
                 <td style={styles.td}>{item.usuarioActual || "---"}</td>
                 
-                {/* AQUÍ ESTÁ LA MAGIA CONDICIONAL DE LOS BOTONES */}
+                {/* --- NUEVO BOTÓN DE QR EN LA TABLA --- */}
+                <td style={{ ...styles.td, textAlign: "center" }}>
+                <button
+                    onClick={() => handleGenerateQR(item)}
+                    style={styles.btnQr}
+                    title="Ver Código QR del equipo"
+                >
+                    🔳 QR
+                </button>
+                </td>
+
+                {/* AQUÍ ESTÁ LA MAGIA CONDICIONAL DE LOS BOTONES DE ACCIONES */}
                 <td style={{ ...styles.td, textAlign: "center", display: "flex", gap: "8px", justifyContent: "center" }}>
                 
                 {item.estado !== "Fuera de Servicio" ? (
@@ -400,5 +433,7 @@ tr: { borderBottom: "1px solid #f0f0f0", transition: "0.2s" },
 td: { padding: "18px 20px", color: "#444", fontSize: "15px" },
 statusBadge: { padding: "6px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "700", textTransform: "uppercase" },
 btnAction: { backgroundColor: "#f0f0f0", color: "#333", border: "1px solid #ddd", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "bold" },
+// NUEVO ESTILO PARA EL BOTÓN DE QR
+btnQr: { backgroundColor: "#5E35B1", color: "white", border: "none", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "bold" },
 noResults: { padding: "40px", textAlign: "center", color: "#999" },
 };

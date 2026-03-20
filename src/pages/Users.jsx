@@ -1,7 +1,8 @@
 // src/pages/Users.jsx
 import { useState, useEffect } from "react";
 import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
-import { createUserWithEmailAndPassword, getAuth, signOut } from "firebase/auth";
+// IMPORTANTE: Agregamos sendPasswordResetEmail aquí
+import { createUserWithEmailAndPassword, getAuth, signOut, sendPasswordResetEmail } from "firebase/auth";
 import { initializeApp } from "firebase/app";
 import { db, auth } from "../config/firebase"; 
 import Sidebar from "../components/Sidebar";
@@ -76,7 +77,7 @@ setLoading(false);
 };
 
 // ==========================================
-// EDITAR USUARIO (SWEETALERT)
+// EDITAR USUARIO (SWEETALERT) CON CAMBIO DE CONTRASEÑA
 // ==========================================
 const handleEditUser = async (usuario) => {
 // 1. Bloquear que el superadmin se edite a sí mismo
@@ -93,7 +94,7 @@ if (userData?.rol !== "superadmin" && usuario.rol === "superadmin") {
 
 // Identificamos si el usuario se está editando a sí mismo (para el caso del admin)
 const isSelfEdit = usuario.id === user.uid;
-// Un admin no puede cambiar su propio rol (solo el superadmin podría, pero ya lo bloqueamos arriba)
+// Un admin no puede cambiar su propio rol
 const canChangeRole = userData?.rol === "superadmin" || !isSelfEdit;
 
 const { value: formValues } = await Swal.fire({
@@ -104,13 +105,22 @@ const { value: formValues } = await Swal.fire({
         <input id="swal-input-nombre" class="swal2-input" value="${usuario.nombre || ''}" style="margin-top: 5px; margin-bottom: 15px; width: 80%;">
         
         <label style="font-size: 14px; font-weight: bold;">Rol:</label>
-        <select id="swal-input-rol" class="swal2-select" style="width: 80%; padding: 10px;" ${!canChangeRole ? 'disabled' : ''}>
+        <select id="swal-input-rol" class="swal2-select" style="width: 80%; padding: 10px; margin-bottom: 20px;" ${!canChangeRole ? 'disabled' : ''}>
             <option value="usuario" ${usuario.rol === 'usuario' ? 'selected' : ''}>Usuario Normal</option>
             <option value="admin" ${usuario.rol === 'admin' ? 'selected' : ''}>Administrador</option>
-            
             ${userData?.rol === 'superadmin' ? `<option value="superadmin" ${usuario.rol === 'superadmin' ? 'selected' : ''}>Super Administrador</option>` : ''}
         </select>
-        ${!canChangeRole ? `<small style="display: block; color: #d32f2f; margin-top: 5px;">* No puedes cambiar tu propio rol por seguridad.</small>` : ''}
+        ${!canChangeRole ? `<small style="display: block; color: #d32f2f; margin-bottom: 15px;">* No puedes cambiar tu propio rol.</small>` : ''}
+
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #ddd; margin-top: 10px;">
+            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px;">
+                <input type="checkbox" id="swal-input-reset" style="width: 18px; height: 18px; cursor: pointer;">
+                <b>Enviar correo para restablecer contraseña</b>
+            </label>
+            <small style="display: block; color: #666; margin-top: 5px; margin-left: 28px;">
+                Se enviará un enlace a <b>${usuario.email}</b> para que asigne una nueva clave.
+            </small>
+        </div>
     </div>`,
     focusConfirm: false,
     showCancelButton: true,
@@ -119,7 +129,8 @@ const { value: formValues } = await Swal.fire({
     preConfirm: () => {
     return {
         nombre: document.getElementById('swal-input-nombre').value,
-        rol: document.getElementById('swal-input-rol').value
+        rol: document.getElementById('swal-input-rol').value,
+        resetPassword: document.getElementById('swal-input-reset').checked
     };
     }
 });
@@ -143,7 +154,21 @@ if (formValues) {
         nombre: formValues.nombre,
         rol: formValues.rol
     });
-    Swal.fire({ icon: 'success', title: '¡Actualizado!', timer: 2000, showConfirmButton: false });
+
+    // ENVIAR CORREO SI EL CHECKBOX ESTÁ MARCADO
+    if (formValues.resetPassword) {
+        await sendPasswordResetEmail(auth, usuario.email);
+        Swal.fire({ 
+        icon: 'success', 
+        title: '¡Actualizado!', 
+        text: `Datos guardados y correo de recuperación enviado a ${usuario.email}`, 
+        timer: 3500, 
+        showConfirmButton: false 
+        });
+    } else {
+        Swal.fire({ icon: 'success', title: '¡Actualizado!', timer: 2000, showConfirmButton: false });
+    }
+
     } catch (error) {
     console.error("Error al editar:", error);
     Swal.fire('Error', 'No se pudieron guardar los cambios.', 'error');
@@ -222,37 +247,37 @@ return (
                 .filter((u) => userData?.rol === "superadmin" || u.rol !== "superadmin")
                 .map((u) => (
                 <tr key={u.id} style={styles.tr}>
-                <td style={styles.td}><b>{u.nombre}</b></td>
-                <td style={styles.td}>{u.email}</td>
-                <td style={styles.td}>
+                    <td style={styles.td}><b>{u.nombre}</b></td>
+                    <td style={styles.td}>{u.email}</td>
+                    <td style={styles.td}>
                     <span style={{
-                    ...styles.badge,
-                    backgroundColor: u.rol === "admin" ? "#fff3e0" : u.rol === "superadmin" ? "#fce4ec" : "#e3f2fd",
-                    color: u.rol === "admin" ? "#e65100" : u.rol === "superadmin" ? "#c2185b" : "#1565c0"
+                        ...styles.badge,
+                        backgroundColor: u.rol === "admin" ? "#fff3e0" : u.rol === "superadmin" ? "#fce4ec" : "#e3f2fd",
+                        color: u.rol === "admin" ? "#e65100" : u.rol === "superadmin" ? "#c2185b" : "#1565c0"
                     }}>
-                    {u.rol}
+                        {u.rol}
                     </span>
-                </td>
-                
-                <td style={{ ...styles.td, textAlign: "center", display: "flex", gap: "8px", justifyContent: "center" }}>
+                    </td>
+                    
+                    <td style={{ ...styles.td, textAlign: "center", display: "flex", gap: "8px", justifyContent: "center" }}>
                     
                     {/* Botón de Editar: Se oculta para el propio Super Admin */}
                     {(userData?.rol === "admin" || userData?.rol === "superadmin") && !(userData?.rol === "superadmin" && u.id === user.uid) && (
-                    <button onClick={() => handleEditUser(u)} style={styles.btnEdit}>
+                        <button onClick={() => handleEditUser(u)} style={styles.btnEdit}>
                         Editar
-                    </button>
+                        </button>
                     )}
 
                     {/* Botón de Eliminar condicionado por rol Y bloqueando la cuenta propia */}
                     {u.id !== user.uid && (userData?.rol === "superadmin" || (userData?.rol === "admin" && u.rol === "usuario")) && (
-                    <button onClick={() => handleDeleteUser(u)} style={styles.btnDelete}>
+                        <button onClick={() => handleDeleteUser(u)} style={styles.btnDelete}>
                         Borrar
-                    </button>
+                        </button>
                     )}
 
-                </td>
+                    </td>
                 </tr>
-            ))}
+                ))}
             </tbody>
         </table>
         </div>
