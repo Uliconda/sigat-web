@@ -1,5 +1,26 @@
 /* src/index.css */
 
+/* ==========================================
+   3. VARIABLES DE TEMA (LA MAGIA DEL MODO OSCURO) 
+   ========================================== */
+:root {
+  /* Modo Claro (Por defecto) */
+  --bg-color: #f8f9fa;
+  --text-color: #1a1a1a;
+  --card-bg: #ffffff;
+  --border-color: #e0e0e0;
+}
+
+html.dark {
+  /* Modo Oscuro */
+  --bg-color: #121212;
+  --text-color: #e0e0e0;
+  --card-bg: #1e1e1e;
+  --border-color: #333333;
+}
+
+/* ========================================== */
+
 /* 1. Reseteamos los márgenes por defecto de los navegadores */
 * {
   margin: 0;
@@ -11,7 +32,12 @@
 html, body, #root {
   width: 100vw;
   min-height: 100vh;
-  background-color: #f8f9fa; /* El gris clarito que usamos en el dashboard */
+  /* 4. AHORA USAMOS LAS VARIABLES EN VEZ DE COLORES FIJOS */
+  background-color: var(--bg-color); 
+  color: var(--text-color);
   font-family: Arial, Helvetica, sans-serif;
   overflow-x: hidden; /* Evita barras de desplazamiento horizontales molestas */
+  
+  /* 5. Le damos una transición suave para que no cambie de golpe */
+  transition: background-color 0.3s ease, color 0.3s ease; 
 }

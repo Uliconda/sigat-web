@@ -159,11 +159,11 @@ if (formValues) {
     if (formValues.resetPassword) {
         await sendPasswordResetEmail(auth, usuario.email);
         Swal.fire({ 
-        icon: 'success', 
-        title: '¡Actualizado!', 
-        text: `Datos guardados y correo de recuperación enviado a ${usuario.email}`, 
-        timer: 3500, 
-        showConfirmButton: false 
+            icon: 'success', 
+            title: '¡Actualizado!', 
+            text: `Datos guardados y correo de recuperación enviado a ${usuario.email}`, 
+            timer: 3500, 
+            showConfirmButton: false 
         });
     } else {
         Swal.fire({ icon: 'success', title: '¡Actualizado!', timer: 2000, showConfirmButton: false });
@@ -222,7 +222,8 @@ if (result.isConfirmed) {
 };
 
 return (
-<div style={{ display: "flex", minHeight: "100vh", backgroundColor: "#f8f9fa" }}>
+// Cambiamos el fondo general
+<div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-color)", transition: "0.3s" }}>
     <Sidebar />
 
     <main style={{ marginLeft: "250px", flex: 1, padding: "40px", display: "flex", gap: "30px" }}>
@@ -247,9 +248,9 @@ return (
                 .filter((u) => userData?.rol === "superadmin" || u.rol !== "superadmin")
                 .map((u) => (
                 <tr key={u.id} style={styles.tr}>
-                    <td style={styles.td}><b>{u.nombre}</b></td>
-                    <td style={styles.td}>{u.email}</td>
-                    <td style={styles.td}>
+                <td style={styles.td}><b>{u.nombre}</b></td>
+                <td style={styles.td}>{u.email}</td>
+                <td style={styles.td}>
                     <span style={{
                         ...styles.badge,
                         backgroundColor: u.rol === "admin" ? "#fff3e0" : u.rol === "superadmin" ? "#fce4ec" : "#e3f2fd",
@@ -257,9 +258,9 @@ return (
                     }}>
                         {u.rol}
                     </span>
-                    </td>
-                    
-                    <td style={{ ...styles.td, textAlign: "center", display: "flex", gap: "8px", justifyContent: "center" }}>
+                </td>
+                
+                <td style={{ ...styles.td, textAlign: "center", display: "flex", gap: "8px", justifyContent: "center" }}>
                     
                     {/* Botón de Editar: Se oculta para el propio Super Admin */}
                     {(userData?.rol === "admin" || userData?.rol === "superadmin") && !(userData?.rol === "superadmin" && u.id === user.uid) && (
@@ -275,9 +276,9 @@ return (
                         </button>
                     )}
 
-                    </td>
+                </td>
                 </tr>
-                ))}
+            ))}
             </tbody>
         </table>
         </div>
@@ -337,21 +338,28 @@ return (
 );
 }
 
+// ==========================================
+// ESTILOS ADAPTADOS AL MODO OSCURO
+// ==========================================
 const styles = {
-title: { margin: 0, fontSize: "28px", color: "#1a1a1a" },
-subtitle: { color: "#666", marginBottom: "30px" },
-tableCard: { backgroundColor: "#f7f3f3", borderRadius: "12px", border: "1px solid #e0e0e0", overflow: "hidden" },
+title: { margin: 0, fontSize: "28px", color: "var(--text-color)", transition: "0.3s" },
+subtitle: { color: "var(--text-color)", opacity: 0.7, marginBottom: "30px", transition: "0.3s" },
+
+tableCard: { backgroundColor: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", overflow: "hidden", transition: "0.3s" },
 table: { width: "100%", borderCollapse: "collapse" },
-theadRow: { backgroundColor: "#fcfcfc", borderBottom: "2px solid #f0f0f0" },
-th: { padding: "15px 20px", textAlign: "left", color: "#888", fontSize: "12px", textTransform: "uppercase" },
-tr: { borderBottom: "1px solid #f0f0f0" },
-td: { padding: "15px 20px", fontSize: "14px", verticalAlign: "middle" },
+theadRow: { backgroundColor: "var(--bg-color)", borderBottom: "2px solid var(--border-color)", transition: "0.3s" },
+th: { padding: "15px 20px", textAlign: "left", color: "var(--text-color)", opacity: 0.7, fontSize: "12px", textTransform: "uppercase" },
+tr: { borderBottom: "1px solid var(--border-color)", transition: "0.3s" },
+td: { padding: "15px 20px", fontSize: "14px", verticalAlign: "middle", color: "var(--text-color)" },
+
 badge: { padding: "4px 10px", borderRadius: "12px", fontSize: "11px", fontWeight: "bold", textTransform: "uppercase" },
-formCard: { backgroundColor: "#fff", padding: "25px", borderRadius: "12px", border: "1px solid #e0e0e0", boxShadow: "0 4px 10px rgba(0,0,0,0.03)" },
+
+formCard: { backgroundColor: "var(--card-bg)", padding: "25px", borderRadius: "12px", border: "1px solid var(--border-color)", boxShadow: "0 4px 10px rgba(0,0,0,0.03)", transition: "0.3s", color: "var(--text-color)" },
 form: { display: "flex", flexDirection: "column", gap: "15px" },
-inputGroup: { display: "flex", flexDirection: "column", gap: "5px" },
-input: { padding: "10px", borderRadius: "6px", border: "1px solid #ddd", fontSize: "14px" },
-btnSubmit: { backgroundColor: "#ff6600", color: "white", border: "none", padding: "12px", borderRadius: "6px", fontWeight: "bold", cursor: "pointer", marginTop: "10px" },
-btnEdit: { backgroundColor: "#ffc107", color: "#000", border: "none", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", fontSize: "12px" },
-btnDelete: { backgroundColor: "#d32f2f", color: "white", border: "none", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", fontSize: "12px" }
+inputGroup: { display: "flex", flexDirection: "column", gap: "5px", color: "var(--text-color)" },
+input: { padding: "10px", borderRadius: "6px", border: "1px solid var(--border-color)", fontSize: "14px", backgroundColor: "transparent", color: "var(--text-color)", transition: "0.3s" },
+
+btnSubmit: { backgroundColor: "#ff6600", color: "white", border: "none", padding: "12px", borderRadius: "6px", fontWeight: "bold", cursor: "pointer", marginTop: "10px", transition: "0.3s" },
+btnEdit: { backgroundColor: "#ffc107", color: "#000", border: "none", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", fontSize: "12px", transition: "0.3s" },
+btnDelete: { backgroundColor: "#d32f2f", color: "white", border: "none", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", fontSize: "12px", transition: "0.3s" }
 };

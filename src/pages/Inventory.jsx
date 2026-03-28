@@ -1,6 +1,5 @@
 // src/pages/Inventory.jsx
 import { useState, useEffect } from "react";
-// Importamos "where" para poder filtrar por fechas
 import { collection, onSnapshot, doc, updateDoc, addDoc, getDocs, query, orderBy, where } from "firebase/firestore";
 import { db } from "../config/firebase"; 
 import { useAuth } from "../context/AuthContext";
@@ -15,7 +14,12 @@ import Swal from 'sweetalert2';
 export default function Inventory() {
 const [equipos, setEquipos] = useState([]);
 const [searchTerm, setSearchTerm] = useState("");
-const [timeFilter, setTimeFilter] = useState("all"); 
+
+// --- NUEVOS ESTADOS PARA REPORTES ---
+const [reportType, setReportType] = useState("all"); // "all" o "rango"
+const [startDate, setStartDate] = useState("");
+const [endDate, setEndDate] = useState("");
+
 const { userData } = useAuth();
 
 // ==========================================
@@ -161,7 +165,6 @@ try {
     usuarioActual: userData?.nombre || "Usuario Web", 
     }); 
     
-
     await addDoc(collection(db, "Historial"), {
     idEquipo: equipo.id,
     nombreEquipo: equipo.nombre,
@@ -179,10 +182,9 @@ try {
 };
 
 // ==========================================
-// 5. NUEVO: FUNCIÓN PARA GENERAR QR EN PANTALLA
+// 5. FUNCIÓN PARA GENERAR QR EN PANTALLA
 // ==========================================
 const handleGenerateQR = (equipo) => {
-// Usamos una API gratuita y rápida para generar el QR basado en el ID del equipo
 const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${equipo.id}`;
 
 Swal.fire({
@@ -199,30 +201,49 @@ Swal.fire({
 };
 
 // ==========================================
-// 6. EXPORTAR EL HISTORIAL CON FILTRO DE FECHA
+// 6. EXPORTAR EL HISTORIAL (NUEVO FILTRO POR FECHAS)
 // ==========================================
 const exportHistoryToExcel = async () => {
 try {
     const historialRef = collection(db, "Historial");
     let q;
+    let nombreArchivo = `Reporte_SIGAT_Completo_${new Date().toLocaleDateString('es-MX').replace(/\//g, '-')}.xlsx`;
 
-    if (timeFilter === "all") {
+    if (reportType === "all") {
     q = query(historialRef, orderBy("fecha", "desc"));
     } else {
-    const limitDate = new Date();
-    limitDate.setDate(limitDate.getDate() - parseInt(timeFilter));
-    
+    // Validaciones del rango de fechas
+    if (!startDate || !endDate) {
+        Swal.fire("Faltan datos", "Por favor selecciona la fecha de inicio y fin para generar el reporte.", "warning");
+        return;
+    }
+
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0); // Desde las 00:00 del día inicial
+
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999); // Hasta las 23:59 del día final
+
+    if (start > end) {
+        Swal.fire("Error en las fechas", "La fecha de inicio no puede ser mayor a la fecha de fin.", "error");
+        return;
+    }
+
     q = query(
         historialRef, 
-        where("fecha", ">=", limitDate), 
+        where("fecha", ">=", start),
+        where("fecha", "<=", end),
         orderBy("fecha", "desc")
     );
+    nombreArchivo = `Reporte_SIGAT_${startDate}_al_${endDate}.xlsx`;
     }
+
+    Swal.fire({ title: 'Generando...', text: 'Obteniendo datos de la nube', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
 
     const snapshot = await getDocs(q);
 
     if (snapshot.empty) {
-    Swal.fire("Sin datos", "No hay movimientos en este rango de fechas.", "info");
+    Swal.fire("Sin datos", "No hay movimientos registrados en este rango de fechas.", "info");
     return;
     }
 
@@ -242,15 +263,15 @@ try {
 
     const worksheet = XLSX.utils.json_to_sheet(datosHistorial);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, `Historial_${timeFilter}dias`);
-    XLSX.writeFile(workbook, `Reporte_SIGAT_${new Date().toLocaleDateString('es-MX').replace(/\//g, '-')}.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, `Historial`);
+    XLSX.writeFile(workbook, nombreArchivo);
     
     Swal.fire("¡Descarga lista!", "El archivo Excel se ha generado correctamente.", "success");
 
 } catch (error) {
     console.error("Error al generar Excel:", error);
     if (error.message.includes("index")) {
-    Swal.fire({ title: "Falta un Índice en Firebase", text: "Ve a la consola de desarrollador para ver el enlace y crear el índice. Tarda un par de minutos en habilitarse.", icon: "warning" });
+    Swal.fire({ title: "Falta un Índice en Firebase", text: "Ve a la consola de Firebase usando el enlace de tu terminal para crear el índice compuesto. Tarda un par de minutos en habilitarse.", icon: "warning" });
     } else {
     Swal.fire("Error", "Error al descargar el historial. Revisa la consola.", "error");
     }
@@ -270,13 +291,13 @@ const tableRows = filteredEquipos.map((item) => [
 ]);
 
 autoTable(doc, {
-    head: [tableColumn], body: tableRows, startY: 20, theme: "grid", headStyles: { fillColor: [255, 102, 0] },
+    head: [tableColumn], body: tableRows, startY: 20, theme: "grid", headStyles: { fillColor: "#ff6600", textColor: "#fff" },
 });
 doc.save("Inventario_Actual_SIGAT.pdf");
 };
 
 return (
-<div style={{ display: "flex", minHeight: "100vh", backgroundColor: "#f8f9fa" }}>
+<div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-color)", transition: "0.3s" }}>
     <Sidebar />
 
     <main style={{ marginLeft: "250px", flex: 1, padding: "40px" }}>
@@ -287,18 +308,43 @@ return (
         </div>
 
         <div style={styles.actions}>
+        {/* --- CONTROLES DE EXPORTACIÓN --- */}
         <div style={styles.exportGroup}>
             <select 
-            value={timeFilter} 
-            onChange={(e) => setTimeFilter(e.target.value)}
+            value={reportType} 
+            onChange={(e) => setReportType(e.target.value)}
             style={styles.selectFilter}
             >
-            <option value="all">Todo el historial</option>
-            <option value="7">Últimos 7 días</option>
-            <option value="30">Últimos 30 días</option>
+            {/* AQUI ESTÁ LA CORRECCIÓN DE LOS COLORES */}
+            <option value="all" style={{ backgroundColor: "var(--card-bg)", color: "var(--text-color)" }}>
+                Todo el historial
+            </option>
+            <option value="rango" style={{ backgroundColor: "var(--card-bg)", color: "var(--text-color)" }}>
+                Elegir Fechas...
+            </option>
             </select>
+
+            {/* Muestra los calendarios si elige "rango" */}
+            {reportType === "rango" && (
+            <div style={styles.datePickerContainer}>
+                <input 
+                type="date" 
+                value={startDate} 
+                onChange={(e) => setStartDate(e.target.value)}
+                style={styles.dateInput}
+                />
+                <span style={{color: 'var(--text-color)', fontSize: '13px'}}>a</span>
+                <input 
+                type="date" 
+                value={endDate} 
+                onChange={(e) => setEndDate(e.target.value)}
+                style={styles.dateInput}
+                />
+            </div>
+            )}
+
             <button onClick={exportHistoryToExcel} style={styles.btnExportExcel}>
-            📊 Descargar Historial
+            {reportType === "all" ? "📊 Descargar TODO" : "📊 Descargar Rango"}
             </button>
         </div>
         
@@ -327,7 +373,6 @@ return (
             <th style={styles.th}>NOMBRE / MODELO</th>
             <th style={styles.th}>ESTADO</th>
             <th style={styles.th}>ÚLTIMO USUARIO</th>
-            {/* --- NUEVA COLUMNA DE QR --- */}
             <th style={{ ...styles.th, textAlign: "center" }}>QR</th>
             <th style={{ ...styles.th, textAlign: "center" }}>ACCIONES</th>
             </tr>
@@ -354,7 +399,6 @@ return (
                 </td>
                 <td style={styles.td}>{item.usuarioActual || "---"}</td>
                 
-                {/* --- NUEVO BOTÓN DE QR EN LA TABLA --- */}
                 <td style={{ ...styles.td, textAlign: "center" }}>
                 <button
                     onClick={() => handleGenerateQR(item)}
@@ -365,7 +409,6 @@ return (
                 </button>
                 </td>
 
-                {/* AQUÍ ESTÁ LA MAGIA CONDICIONAL DE LOS BOTONES DE ACCIONES */}
                 <td style={{ ...styles.td, textAlign: "center", display: "flex", gap: "8px", justifyContent: "center" }}>
                 
                 {item.estado !== "Fuera de Servicio" ? (
@@ -412,28 +455,33 @@ return (
 }
 
 // ==========================================
-// ESTILOS
+// ESTILOS ADAPTADOS A VARIABLES GLOBALES
 // ==========================================
 const styles = {
-header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "30px" },
-title: { margin: 0, fontSize: "28px", color: "#1a1a1a" },
-subtitle: { margin: "5px 0 0 0", color: "#666" },
-actions: { display: "flex", gap: "10px", alignItems: "center" },
-exportGroup: { display: "flex", backgroundColor: "#fff", borderRadius: "8px", border: "1px solid #ccc", overflow: "hidden" },
-selectFilter: { border: "none", padding: "0 10px", outline: "none", backgroundColor: "#f9f9f9", color: "#333", borderRight: "1px solid #ddd", cursor: "pointer", fontSize: "14px" },
+header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "30px", flexWrap: "wrap", gap: "20px" },
+title: { margin: 0, fontSize: "28px", color: "var(--text-color)", transition: "0.3s" },
+subtitle: { margin: "5px 0 0 0", color: "var(--text-color)", opacity: 0.7, transition: "0.3s" },
+actions: { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" },
+
+exportGroup: { display: "flex", backgroundColor: "var(--card-bg)", borderRadius: "8px", border: "1px solid var(--border-color)", overflow: "hidden", transition: "0.3s" },
+selectFilter: { border: "none", padding: "12px 10px", outline: "none", backgroundColor: "transparent", color: "var(--text-color)", borderRight: "1px solid var(--border-color)", cursor: "pointer", fontSize: "14px" },
+datePickerContainer: { display: "flex", alignItems: "center", gap: "8px", padding: "0 10px", borderRight: "1px solid var(--border-color)", backgroundColor: "var(--bg-color)" },
+dateInput: { border: "1px solid var(--border-color)", borderRadius: "4px", padding: "5px", outline: "none", backgroundColor: "var(--card-bg)", color: "var(--text-color)", fontSize: "13px" },
 btnExportExcel: { backgroundColor: "#217346", color: "white", border: "none", padding: "12px 18px", cursor: "pointer", fontWeight: "600", transition: "0.2s" },
 btnExportPdf: { backgroundColor: "#d32f2f", color: "white", border: "none", padding: "12px 18px", borderRadius: "8px", cursor: "pointer", fontWeight: "600", transition: "0.2s" },
-searchContainer: { backgroundColor: "#fff", padding: "12px 20px", borderRadius: "12px", display: "flex", alignItems: "center", marginBottom: "25px", border: "1px solid #e0e0e0" },
-searchInput: { border: "none", outline: "none", width: "100%", fontSize: "16px" },
-tableCard: { backgroundColor: "#fff", borderRadius: "15px", border: "1px solid #e0e0e0", overflow: "hidden", boxShadow: "0 4px 6px rgba(0,0,0,0.02)" },
+
+searchContainer: { backgroundColor: "var(--card-bg)", padding: "12px 20px", borderRadius: "12px", display: "flex", alignItems: "center", marginBottom: "25px", border: "1px solid var(--border-color)", transition: "0.3s" },
+searchInput: { border: "none", outline: "none", width: "100%", fontSize: "16px", backgroundColor: "transparent", color: "var(--text-color)" },
+
+tableCard: { backgroundColor: "var(--card-bg)", borderRadius: "15px", border: "1px solid var(--border-color)", overflow: "hidden", boxShadow: "0 4px 6px rgba(0,0,0,0.02)", transition: "0.3s" },
 table: { width: "100%", borderCollapse: "collapse", textAlign: "left" },
-theadRow: { backgroundColor: "#fcfcfc", borderBottom: "2px solid #f0f0f0" },
-th: { padding: "18px 20px", fontSize: "13px", color: "#888", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" },
-tr: { borderBottom: "1px solid #f0f0f0", transition: "0.2s" },
-td: { padding: "18px 20px", color: "#444", fontSize: "15px" },
+theadRow: { backgroundColor: "var(--bg-color)", borderBottom: "2px solid var(--border-color)", transition: "0.3s" },
+th: { padding: "18px 20px", fontSize: "13px", color: "var(--text-color)", opacity: 0.7, fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" },
+tr: { borderBottom: "1px solid var(--border-color)", transition: "0.2s" },
+td: { padding: "18px 20px", color: "var(--text-color)", fontSize: "15px" },
+
 statusBadge: { padding: "6px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "700", textTransform: "uppercase" },
-btnAction: { backgroundColor: "#f0f0f0", color: "#333", border: "1px solid #ddd", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "bold" },
-// NUEVO ESTILO PARA EL BOTÓN DE QR
+btnAction: { backgroundColor: "var(--bg-color)", color: "var(--text-color)", border: "1px solid var(--border-color)", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "bold", transition: "0.3s" },
 btnQr: { backgroundColor: "#5E35B1", color: "white", border: "none", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "bold" },
-noResults: { padding: "40px", textAlign: "center", color: "#999" },
+noResults: { padding: "40px", textAlign: "center", color: "var(--text-color)", opacity: 0.6 },
 };
