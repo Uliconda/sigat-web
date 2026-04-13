@@ -1,4 +1,4 @@
-  // src/pages/Inventory.jsx
+// src/pages/Inventory.jsx
   import { useState, useEffect } from "react";
   import { collection, onSnapshot, doc, updateDoc, addDoc, getDocs, query, orderBy, where } from "firebase/firestore";
   import { db } from "../config/firebase"; 
@@ -219,10 +219,10 @@
           }
 
           const start = new Date(startDate);
-          start.setHours(0, 0, 0, 0); // Desde las 00:00 del día inicial
+          start.setHours(0, 0, 0, 0); 
 
           const end = new Date(endDate);
-          end.setHours(23, 59, 59, 999); // Hasta las 23:59 del día final
+          end.setHours(23, 59, 59, 999); 
 
           if (start > end) {
             Swal.fire("Error en las fechas", "La fecha de inicio no puede ser mayor a la fecha de fin.", "error");
@@ -250,7 +250,6 @@
         const datosHistorial = snapshot.docs.map((doc) => {
           const data = doc.data();
           
-          // Reemplazamos la línea problemática por esta evaluación doble
           const fechaLegible = data.fecha 
             ? (typeof data.fecha.toDate === 'function' 
                 ? data.fecha.toDate().toLocaleString("es-MX") 
@@ -285,21 +284,88 @@
     };
 
     // ==========================================
-    // 7. FUNCIÓN PARA EXPORTAR LA VISTA ACTUAL A PDF
+    // 7. FUNCIÓN PARA EXPORTAR LA VISTA ACTUAL A PDF CON FILTRO
     // ==========================================
-    const exportToPDF = () => {
-      const doc = new jsPDF();
-      doc.text("Estado Actual del Inventario - SIGAT", 14, 15);
+    const exportToPDF = async () => {
+      // 1. Extraemos las categorías únicas que existan en la base de datos actual
+      // Asumimos que los equipos tienen una propiedad llamada 'categoria'
+      const categoriasUnicas = [...new Set(equipos.map(item => item.categoria).filter(Boolean))];
+      
+      // 2. Preparamos las opciones para el SweetAlert
+      const inputOptions = {
+        "Todo": "Todo el inventario (Completo)"
+      };
+      
+      categoriasUnicas.forEach(cat => {
+        inputOptions[cat] = `Solo ${cat}`;
+      });
 
-      const tableColumn = ["ID", "Nombre", "Estado", "Usuario"];
-      const tableRows = filteredEquipos.map((item) => [
-        item.id, item.nombre, item.estado, item.usuarioActual || "---",
+      // 3. Mostramos la alerta para que el usuario elija
+      const { value: categoriaSeleccionada } = await Swal.fire({
+        title: 'Generar PDF',
+        text: '¿Qué información deseas incluir en el reporte?',
+        icon: 'question',
+        input: 'select',
+        inputOptions: inputOptions,
+        inputPlaceholder: 'Selecciona una opción',
+        showCancelButton: true,
+        confirmButtonText: 'Generar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#d32f2f',
+        inputValidator: (value) => {
+          if (!value) {
+            return 'Debes seleccionar una opción';
+          }
+        }
+      });
+
+      if (!categoriaSeleccionada) return; // Si el usuario cancela, no hacemos nada
+
+      // 4. Filtramos los datos según la elección
+      let equiposAExportar = filteredEquipos; // Tomamos como base lo que ya está filtrado por la barra de búsqueda
+
+      if (categoriaSeleccionada !== "Todo") {
+        equiposAExportar = filteredEquipos.filter(item => item.categoria === categoriaSeleccionada);
+      }
+
+      if (equiposAExportar.length === 0) {
+        Swal.fire("Sin datos", `No se encontraron equipos para la opción: ${categoriaSeleccionada}`, "info");
+        return;
+      }
+
+      // 5. Generamos el PDF
+      const doc = new jsPDF();
+      
+      // Título dinámico
+      const tituloPDF = categoriaSeleccionada === "Todo" 
+        ? "Estado Actual del Inventario - SIGAT (Completo)"
+        : `Reporte de Inventario - Categoría: ${categoriaSeleccionada}`;
+
+      doc.text(tituloPDF, 14, 15);
+
+      const tableColumn = ["ID", "Nombre", "Categoría", "Estado", "Usuario"];
+      const tableRows = equiposAExportar.map((item) => [
+        item.id, 
+        item.nombre, 
+        item.categoria || "---", 
+        item.estado, 
+        item.usuarioActual || "---",
       ]);
 
       autoTable(doc, {
-        head: [tableColumn], body: tableRows, startY: 20, theme: "grid", headStyles: { fillColor: "#ff6600", textColor: "#fff" },
+        head: [tableColumn], 
+        body: tableRows, 
+        startY: 20, 
+        theme: "grid", 
+        headStyles: { fillColor: "#ff6600", textColor: "#fff" },
       });
-      doc.save("Inventario_Actual_SIGAT.pdf");
+      
+      // Guardar con nombre dinámico
+      const nombreArchivo = categoriaSeleccionada === "Todo" 
+        ? "Inventario_Completo_SIGAT.pdf" 
+        : `Inventario_${categoriaSeleccionada.replace(/\s+/g, '_')}_SIGAT.pdf`;
+        
+      doc.save(nombreArchivo);
     };
 
     return (
@@ -321,7 +387,6 @@
                   onChange={(e) => setReportType(e.target.value)}
                   style={styles.selectFilter}
                 >
-                  {/* AQUI ESTÁ LA CORRECCIÓN DE LOS COLORES */}
                   <option value="all" style={{ backgroundColor: "var(--card-bg)", color: "var(--text-color)" }}>
                     Todo el historial
                   </option>
@@ -389,7 +454,6 @@
                     <td style={styles.td}><b>{item.id}</b></td>
                     <td style={styles.td}>{item.nombre}</td>
                     <td style={styles.td}>
-                      {/* AQUI SE ACTUALIZAN LOS COLORES DEL ESTADO */}
                       <span
                         style={{
                           ...styles.statusBadge,
@@ -397,12 +461,12 @@
                             item.estado?.toLowerCase() === "disponible" ? "#e8f5e9" : 
                             (item.estado?.toLowerCase() === "prestado" || item.estado?.toLowerCase() === "sin entregar") ? "#ffebee" : 
                             item.estado?.toLowerCase() === "no responde" ? "#fce4ec" : 
-                            "#eeeeee", // Fuera de servicio
+                            "#eeeeee", 
                           color: 
                             item.estado?.toLowerCase() === "disponible" ? "#2e7d32" : 
                             (item.estado?.toLowerCase() === "prestado" || item.estado?.toLowerCase() === "sin entregar") ? "#c62828" : 
                             item.estado?.toLowerCase() === "no responde" ? "#ad1457" : 
-                            "#616161", // Fuera de servicio
+                            "#616161", 
                         }}
                       >
                         {item.estado}
