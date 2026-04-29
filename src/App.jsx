@@ -1,26 +1,28 @@
 // src/App.jsx
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-// Importamos nuestras pantallas y componentes
+// Importamos nuestras pantallas y componentes principales
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import Inventory from "./pages/Inventory"; // Importación 
+import Inventory from "./pages/Inventory"; 
 import Users from "./pages/Users";
-import QrGenerator from "./pages/QrGenerator"; // Importación del nuevo componente
+import QrGenerator from "./pages/QrGenerator"; 
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import Maintenance from "./pages/Maintenance";
+
 
 // Pantallas temporales (placeholders) para que el Sidebar no de error al hacer clic
 const UsersPlaceholder = () => (
   <div style={{ display: 'flex' }}>
     <div style={{ width: '250px' }}><aside /></div> {/* Espacio para el Sidebar */}
-    <div style={{ padding: '40px' }}><h2>Próximamente: Gestión de Usuarios</h2></div>
+    
   </div>
 );
 
 const QrPlaceholder = () => (
   <div style={{ display: 'flex' }}>
     <div style={{ width: '250px' }}><aside /></div>
-    <div style={{ padding: '40px' }}><h2>Próximamente: Generador de QR</h2></div>
+    
   </div>
 );
 
@@ -53,7 +55,7 @@ function App() {
           } 
         />
 
-        {/* 3. Gestión de Usuarios (Ruta futura) */}
+        {/* 3. Gestión de Usuarios */}
         <Route 
           path="/usuarios" 
           element={
@@ -63,12 +65,22 @@ function App() {
           } 
         />
 
-        {/* 4. Generador de QR (Ruta futura) */}
+        {/* 4. Generador de QR */}
         <Route 
           path="/qr" 
           element={
             <ProtectedRoute>
               <QrGenerator />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* 5. Mantenimiento Preventivo (RCM) */}
+        <Route 
+          path="/mantenimiento" 
+          element={
+            <ProtectedRoute>
+              <Maintenance />
             </ProtectedRoute>
           } 
         />
