@@ -31,21 +31,28 @@ export default function Dashboard() {
 
   const STATUS_COLORS = ["#2e7d32", "#c62828", "#616161", "#ad1457"];
 
-  // 1. ESCUCHA DE INVENTARIO (Equipos)
+// 1. ESCUCHA DE INVENTARIO (Equipos)
   useEffect(() => {
     const unsubscribe = onSnapshot(collection(db, "Equipos"), (snapshot) => {
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      const disponibles = docs.filter(i => i.estado?.toLowerCase() === "disponible").length;
-      const prestados = docs.filter(i => 
+      // 👇 NUEVO: Filtramos para quedarnos ÚNICAMENTE con los equipos reales
+      const equiposReales = docs.filter(item => 
+        !item.isTemplate && item.nombre?.toLowerCase() !== "plantilla sistema"
+      );
+      
+      // 👇 De aquí en adelante, usamos "equiposReales" en lugar de "docs"
+      const disponibles = equiposReales.filter(i => i.estado?.toLowerCase() === "disponible").length;
+      const prestados = equiposReales.filter(i => 
         ["prestado", "sin entregar"].includes(i.estado?.toLowerCase())
       ).length;
-      const fueraDeServicio = docs.filter(i => i.estado?.toLowerCase() === "fuera de servicio").length;
-      const faltas = docs.filter(i => i.estado?.toLowerCase() === "no responde").length;
+      const fueraDeServicio = equiposReales.filter(i => i.estado?.toLowerCase() === "fuera de servicio").length;
+      const faltas = equiposReales.filter(i => i.estado?.toLowerCase() === "no responde").length;
       
-      setMetrics({ total: docs.length, disponibles, prestados, fueraDeServicio, faltas });
+      // 👇 El total ahora reflejará solo la longitud de equiposReales
+      setMetrics({ total: equiposReales.length, disponibles, prestados, fueraDeServicio, faltas });
 
-      const equiposFuera = docs.filter(i => 
+      const equiposFuera = equiposReales.filter(i => 
         ["prestado", "sin entregar", "no responde"].includes(i.estado?.toLowerCase())
       );
       setPrestadosList(equiposFuera);
@@ -58,7 +65,7 @@ export default function Dashboard() {
       ]);
 
       const catCounts = {};
-      docs.forEach(doc => {
+      equiposReales.forEach(doc => {
         const cat = doc.categoria || "General"; 
         catCounts[cat] = (catCounts[cat] || 0) + 1;
       });

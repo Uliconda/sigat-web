@@ -15,8 +15,7 @@ export default function Inventory() {
   const [equipos, setEquipos] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // --- NUEVOS ESTADOS PARA REPORTES ---
-  const [reportType, setReportType] = useState("all"); // "all" o "rango"
+  const [reportType, setReportType] = useState("all"); 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -36,10 +35,15 @@ export default function Inventory() {
     return () => unsubscribe();
   }, []);
 
-  const filteredEquipos = equipos.filter((item) =>
-    (item.nombre || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (item.id || "").toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // FILTRADO DE EQUIPOS Y OCULTAMIENTO DE PLANTILLAS
+  const filteredEquipos = equipos.filter((item) => {
+    if (item.isTemplate || item.nombre === "Plantilla Sistema") return false;
+
+    return (
+      (item.nombre || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.id || "").toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
 
   // ==========================================
   // 2. FUNCIÓN PARA CAMBIAR ESTADO NORMAL
@@ -77,14 +81,7 @@ export default function Inventory() {
         observaciones: "Cambio de estado manual desde la Web",
       });
 
-      Swal.fire({
-        title: '¡Actualizado!',
-        text: `El equipo ahora está ${nuevoEstado}.`,
-        icon: 'success',
-        timer: 2000, 
-        showConfirmButton: false
-      });
-
+      Swal.fire({ title: '¡Actualizado!', text: `El equipo ahora está ${nuevoEstado}.`, icon: 'success', timer: 2000, showConfirmButton: false });
     } catch (error) {
       console.error("Error al actualizar:", error);
       Swal.fire('Error', 'Hubo un problema de conexión al guardar el movimiento.', 'error');
@@ -197,15 +194,14 @@ export default function Inventory() {
       showDenyButton: true,
       showCancelButton: true,
       confirmButtonColor: '#FF6F00',
-      denyButtonColor: '#28a745', // Color verde para descargar
-      cancelButtonColor: '#17a2b8', // Color azul para imprimir
+      denyButtonColor: '#28a745', 
+      cancelButtonColor: '#17a2b8', 
       confirmButtonText: 'Cerrar',
       denyButtonText: '📥 Descargar',
       cancelButtonText: '🖨️ Imprimir',
       footer: '<span style="color: gray; font-size: 13px;">Puedes escanear este código desde la App Móvil</span>'
     });
 
-    // Acción para descargar
     if (result.isDenied) {
       try {
         const response = await fetch(qrUrl);
@@ -220,11 +216,9 @@ export default function Inventory() {
         window.URL.revokeObjectURL(url);
       } catch (error) {
         console.error("Error al descargar el QR:", error);
-        // Fallback en caso de restricciones de CORS: abrir en una nueva pestaña
         window.open(qrUrl, '_blank');
       }
     } 
-    // Acción para imprimir
     else if (result.dismiss === Swal.DismissReason.cancel) {
       const printWindow = window.open('', '_blank');
       printWindow.document.write(`
@@ -234,10 +228,7 @@ export default function Inventory() {
             <style>
               body { text-align: center; font-family: Arial, sans-serif; margin-top: 50px; }
               img { margin-top: 20px; }
-              @media print {
-                @page { margin: 0; }
-                body { margin: 1.6cm; }
-              }
+              @media print { @page { margin: 0; } body { margin: 1.6cm; } }
             </style>
           </head>
           <body>
@@ -246,10 +237,7 @@ export default function Inventory() {
             <img src="${qrUrl}" width="250" height="250" alt="QR Code" />
             <script>
               window.onload = function() {
-                setTimeout(() => {
-                  window.print();
-                  window.close();
-                }, 500); // Pequeño delay para asegurar que cargue la imagen
+                setTimeout(() => { window.print(); window.close(); }, 500);
               };
             </script>
           </body>
@@ -259,8 +247,8 @@ export default function Inventory() {
     }
   };
 
-  // ==========================================
-  // 6. EXPORTAR EL HISTORIAL (NUEVO FILTRO POR FECHAS)
+// ==========================================
+  // 6. EXPORTAR EL HISTORIAL (EXCEL) CON SUB-CATEGORÍAS Y SUB-SUBCATEGORÍAS
   // ==========================================
   const exportHistoryToExcel = async () => {
     try {
@@ -271,7 +259,6 @@ export default function Inventory() {
       if (reportType === "all") {
         q = query(historialRef, orderBy("fecha", "desc"));
       } else {
-        // Validaciones del rango de fechas
         if (!startDate || !endDate) {
           Swal.fire("Faltan datos", "Por favor selecciona la fecha de inicio y fin para generar el reporte.", "warning");
           return;
@@ -279,7 +266,6 @@ export default function Inventory() {
 
         const start = new Date(startDate);
         start.setHours(0, 0, 0, 0); 
-
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999); 
 
@@ -288,12 +274,7 @@ export default function Inventory() {
           return;
         }
 
-        q = query(
-          historialRef, 
-          where("fecha", ">=", start),
-          where("fecha", "<=", end),
-          orderBy("fecha", "desc")
-        );
+        q = query(historialRef, where("fecha", ">=", start), where("fecha", "<=", end), orderBy("fecha", "desc"));
         nombreArchivo = `Reporte_SIGAT_${startDate}_al_${endDate}.xlsx`;
       }
 
@@ -310,15 +291,18 @@ export default function Inventory() {
         const data = doc.data();
         
         const fechaLegible = data.fecha 
-          ? (typeof data.fecha.toDate === 'function' 
-              ? data.fecha.toDate().toLocaleString("es-MX") 
-              : new Date(data.fecha).toLocaleString("es-MX")) 
+          ? (typeof data.fecha.toDate === 'function' ? data.fecha.toDate().toLocaleString("es-MX") : new Date(data.fecha).toLocaleString("es-MX")) 
           : "Sin fecha";
+
+        const equipoInfo = equipos.find(e => e.id === data.idEquipo);
 
         return {
           "Fecha y Hora": fechaLegible,
           "ID Equipo": data.idEquipo,
           "Nombre Equipo": data.nombreEquipo,
+          "Categoría": equipoInfo?.categoria || "---",
+          "Subcategoría": equipoInfo?.subcategoria || "---",          // 👈 Tu 2do nivel
+          "Tipo (Sub-Sub)": equipoInfo?.subSubcategoria || "---",     // 👈 Tu 3er nivel (LAPTOPS y PC's)
           "Acción": data.accion,
           "Administrador": data.admin,
           "Observaciones": data.observaciones,
@@ -334,33 +318,47 @@ export default function Inventory() {
 
     } catch (error) {
       console.error("Error al generar Excel:", error);
-      if (error.message.includes("index")) {
-        Swal.fire({ title: "Falta un Índice en Firebase", text: "Ve a la consola de Firebase usando el enlace de tu terminal para crear el índice compuesto. Tarda un par de minutos en habilitarse.", icon: "warning" });
-      } else {
-        Swal.fire("Error", "Error al descargar el historial. Revisa la consola.", "error");
-      }
+      Swal.fire("Error", "Error al descargar el historial. Revisa la consola.", "error");
     }
   };
 
-  // ==========================================
-  // 7. FUNCIÓN PARA EXPORTAR LA VISTA ACTUAL A PDF CON FILTRO
+// ==========================================
+  // 7. FUNCIÓN PARA EXPORTAR A PDF (CON SELECTOR DE LOS 3 NIVELES)
   // ==========================================
   const exportToPDF = async () => {
-    // 1. Extraemos las categorías únicas que existan en la base de datos actual
-    // Asumimos que los equipos tienen una propiedad llamada 'categoria'
-    const categoriasUnicas = [...new Set(equipos.map(item => item.categoria).filter(Boolean))];
-    
-    // 2. Preparamos las opciones para el SweetAlert
     const inputOptions = {
       "Todo": "Todo el inventario (Completo)"
     };
     
-    categoriasUnicas.forEach(cat => {
-      inputOptions[cat] = `Solo ${cat}`;
+    // Construimos dinámicamente las opciones del menú basadas en los equipos reales
+    equipos.forEach(item => {
+      if (item.isTemplate || item.nombre?.toLowerCase() === "plantilla sistema") return;
+      
+      if (item.categoria) {
+        // 1. Nivel Categoría (Este se queda igual para que puedas seleccionar la carpeta principal)
+        if (!inputOptions[item.categoria]) {
+          inputOptions[item.categoria] = `📁 Todo ${item.categoria}`;
+        }
+        
+        // 2. Nivel Subcategoría (AQUÍ ESTÁ LA MAGIA: Ignoramos si dice "GENERAL")
+        if (item.subcategoria && item.subcategoria.toUpperCase() !== "GENERAL") {
+          const claveSub = `${item.categoria}|${item.subcategoria}`;
+          if (!inputOptions[claveSub]) {
+            inputOptions[claveSub] = `   ↳ Todo ${item.subcategoria}`;
+          }
+          
+          // 3. Nivel Sub-Subcategoría (También ignoramos si dice "GENERAL")
+          if (item.subSubcategoria && item.subSubcategoria.toUpperCase() !== "GENERAL") {
+            const claveSubSub = `${item.categoria}|${item.subcategoria}|${item.subSubcategoria}`;
+            if (!inputOptions[claveSubSub]) {
+              inputOptions[claveSubSub] = `      - Solo ${item.subSubcategoria}`;
+            }
+          }
+        }
+      }
     });
 
-    // 3. Mostramos la alerta para que el usuario elija
-    const { value: categoriaSeleccionada } = await Swal.fire({
+    const { value: seleccion } = await Swal.fire({
       title: 'Generar PDF',
       text: '¿Qué información deseas incluir en el reporte?',
       icon: 'question',
@@ -372,43 +370,60 @@ export default function Inventory() {
       cancelButtonText: 'Cancelar',
       confirmButtonColor: '#d32f2f',
       inputValidator: (value) => {
-        if (!value) {
-          return 'Debes seleccionar una opción';
-        }
+        if (!value) return 'Debes seleccionar una opción';
       }
     });
 
-    if (!categoriaSeleccionada) return; // Si el usuario cancela, no hacemos nada
+    if (!seleccion) return;
 
-    // 4. Filtramos los datos según la elección
-    let equiposAExportar = filteredEquipos; // Tomamos como base lo que ya está filtrado por la barra de búsqueda
+    let equiposAExportar = filteredEquipos;
+    let tituloSecundario = "";
 
-    if (categoriaSeleccionada !== "Todo") {
-      equiposAExportar = filteredEquipos.filter(item => item.categoria === categoriaSeleccionada);
+    if (seleccion !== "Todo") {
+      const parts = seleccion.split("|");
+      
+      if (parts.length === 3) {
+        // Eligió hasta la Sub-Subcategoría (Ej. ADMINISTRATIVOS > COBRANZA > LAPTOPS)
+        equiposAExportar = filteredEquipos.filter(item => item.categoria === parts[0] && item.subcategoria === parts[1] && item.subSubcategoria === parts[2]);
+        tituloSecundario = `${parts[0]} > ${parts[1]} > ${parts[2]}`;
+      } 
+      else if (parts.length === 2) {
+        // Eligió hasta la Subcategoría (Ej. ADMINISTRATIVOS > COBRANZA)
+        equiposAExportar = filteredEquipos.filter(item => item.categoria === parts[0] && item.subcategoria === parts[1]);
+        tituloSecundario = `${parts[0]} > ${parts[1]}`;
+      } 
+      else {
+        // Eligió la categoría principal completa
+        equiposAExportar = filteredEquipos.filter(item => item.categoria === parts[0]);
+        tituloSecundario = `${parts[0]} (Completo)`;
+      }
     }
 
     if (equiposAExportar.length === 0) {
-      Swal.fire("Sin datos", `No se encontraron equipos para la opción: ${categoriaSeleccionada}`, "info");
+      Swal.fire("Sin datos", "No se encontraron equipos para esta selección.", "info");
       return;
     }
 
-    // 5. Generamos el PDF
-    const doc = new jsPDF();
+    const doc = new jsPDF("landscape"); // 👈 Lo cambié a horizontal para que quepan bien todas tus columnas
     
-    // Título dinámico
-    const tituloPDF = categoriaSeleccionada === "Todo" 
+    const tituloPDF = seleccion === "Todo" 
       ? "Estado Actual del Inventario - SIGAT (Completo)"
-      : `Reporte de Inventario - Categoría: ${categoriaSeleccionada}`;
+      : `Reporte de Inventario - ${tituloSecundario}`;
 
     doc.text(tituloPDF, 14, 15);
 
-    const tableColumn = ["ID", "Nombre", "Categoría", "Estado", "Usuario"];
+// Ajustamos las columnas para incluir la descripción
+    const tableColumn = ["ID", "Nombre / Modelo", "Categoría", "Sub.", "Sub-Sub", "Estado", "Usuario", "Descripción"]; // 👈 Se agregó Descripción al final
+    
     const tableRows = equiposAExportar.map((item) => [
       item.id, 
       item.nombre, 
       item.categoria || "---", 
+      item.subcategoria || "---", 
+      item.subSubcategoria || "---", 
       item.estado, 
       item.usuarioActual || "---",
+      item.descripcion || "---", // 👈 Aquí jalamos el campo descripción de tu base de datos
     ]);
 
     autoTable(doc, {
@@ -417,12 +432,15 @@ export default function Inventory() {
       startY: 20, 
       theme: "grid", 
       headStyles: { fillColor: "#ff6600", textColor: "#fff" },
+      styles: { fontSize: 7.5, overflow: "linebreak" }, // 👈 Letra un pelín más chica y activamos salto de línea automático
+      columnStyles: {
+        7: { cellWidth: 50 } // 👈 A la columna 7 (Descripción) le damos un ancho fijo para que no aplaste al resto
+      }
     });
     
-    // Guardar con nombre dinámico
-    const nombreArchivo = categoriaSeleccionada === "Todo" 
+    const nombreArchivo = seleccion === "Todo" 
       ? "Inventario_Completo_SIGAT.pdf" 
-      : `Inventario_${categoriaSeleccionada.replace(/\s+/g, '_')}_SIGAT.pdf`;
+      : `Inventario_${seleccion.replace(/\|/g, '_').replace(/\s+/g, '')}_SIGAT.pdf`;
       
     doc.save(nombreArchivo);
   };
@@ -439,37 +457,21 @@ export default function Inventory() {
           </div>
 
           <div style={styles.actions}>
-            {/* --- CONTROLES DE EXPORTACIÓN --- */}
             <div style={styles.exportGroup}>
               <select 
                 value={reportType} 
                 onChange={(e) => setReportType(e.target.value)}
                 style={styles.selectFilter}
               >
-                <option value="all" style={{ backgroundColor: "var(--card-bg)", color: "var(--text-color)" }}>
-                  Todo el historial
-                </option>
-                <option value="rango" style={{ backgroundColor: "var(--card-bg)", color: "var(--text-color)" }}>
-                  Elegir Fechas...
-                </option>
+                <option value="all" style={{ backgroundColor: "var(--card-bg)", color: "var(--text-color)" }}>Todo el historial</option>
+                <option value="rango" style={{ backgroundColor: "var(--card-bg)", color: "var(--text-color)" }}>Elegir Fechas...</option>
               </select>
 
-              {/* Muestra los calendarios si elige "rango" */}
               {reportType === "rango" && (
                 <div style={styles.datePickerContainer}>
-                  <input 
-                    type="date" 
-                    value={startDate} 
-                    onChange={(e) => setStartDate(e.target.value)}
-                    style={styles.dateInput}
-                  />
+                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} style={styles.dateInput} />
                   <span style={{color: 'var(--text-color)', fontSize: '13px'}}>a</span>
-                  <input 
-                    type="date" 
-                    value={endDate} 
-                    onChange={(e) => setEndDate(e.target.value)}
-                    style={styles.dateInput}
-                  />
+                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} style={styles.dateInput} />
                 </div>
               )}
 
@@ -478,9 +480,7 @@ export default function Inventory() {
               </button>
             </div>
             
-            <button onClick={exportToPDF} style={styles.btnExportPdf}>
-              📄 PDF Vista Actual
-            </button>
+            <button onClick={exportToPDF} style={styles.btnExportPdf}>📄 PDF Vista Actual</button>
           </div>
         </header>
 
@@ -519,13 +519,11 @@ export default function Inventory() {
                         backgroundColor: 
                           item.estado?.toLowerCase() === "disponible" ? "#e8f5e9" : 
                           (item.estado?.toLowerCase() === "prestado" || item.estado?.toLowerCase() === "sin entregar") ? "#ffebee" : 
-                          item.estado?.toLowerCase() === "no responde" ? "#fce4ec" : 
-                          "#eeeeee", 
+                          item.estado?.toLowerCase() === "no responde" ? "#fce4ec" : "#eeeeee", 
                         color: 
                           item.estado?.toLowerCase() === "disponible" ? "#2e7d32" : 
                           (item.estado?.toLowerCase() === "prestado" || item.estado?.toLowerCase() === "sin entregar") ? "#c62828" : 
-                          item.estado?.toLowerCase() === "no responde" ? "#ad1457" : 
-                          "#616161", 
+                          item.estado?.toLowerCase() === "no responde" ? "#ad1457" : "#616161", 
                       }}
                     >
                       {item.estado}
@@ -534,45 +532,18 @@ export default function Inventory() {
                   <td style={styles.td}>{item.usuarioActual || "---"}</td>
                   
                   <td style={{ ...styles.td, textAlign: "center" }}>
-                    <button
-                      onClick={() => handleGenerateQR(item)}
-                      style={styles.btnQr}
-                      title="Ver Código QR del equipo"
-                    >
-                      🔳 QR
-                    </button>
+                    <button onClick={() => handleGenerateQR(item)} style={styles.btnQr} title="Ver Código QR del equipo">🔳 QR</button>
                   </td>
 
                   <td style={{ ...styles.td, textAlign: "center", display: "flex", gap: "8px", justifyContent: "center" }}>
-                    
                     {item.estado !== "Fuera de Servicio" ? (
                       <>
-                        <button
-                          onClick={() => handleToggleStatus(item)}
-                          style={styles.btnAction}
-                          title="Cambiar estado (Prestar/Devolver)"
-                        >
-                          🔄 Estado
-                        </button>
-
-                        <button
-                          onClick={() => handleDiscardEquipment(item)}
-                          style={{...styles.btnAction, backgroundColor: "#fff0f0", color: "#d32f2f", borderColor: "#ffcdd2"}}
-                          title="Marcar como descompuesto o fuera de servicio"
-                        >
-                          🚫 Baja
-                        </button>
+                        <button onClick={() => handleToggleStatus(item)} style={styles.btnAction} title="Cambiar estado (Prestar/Devolver)">🔄 Estado</button>
+                        <button onClick={() => handleDiscardEquipment(item)} style={{...styles.btnAction, backgroundColor: "#fff0f0", color: "#d32f2f", borderColor: "#ffcdd2"}} title="Marcar como descompuesto o fuera de servicio">🚫 Baja</button>
                       </>
                     ) : (
-                      <button
-                        onClick={() => handleRestoreEquipment(item)}
-                        style={{...styles.btnAction, backgroundColor: "#e8f5e9", color: "#2e7d32", borderColor: "#c8e6c9"}}
-                        title="Volver a activar este equipo (Ej. Se reparó)"
-                      >
-                        ✅ Reactivar
-                      </button>
+                      <button onClick={() => handleRestoreEquipment(item)} style={{...styles.btnAction, backgroundColor: "#e8f5e9", color: "#2e7d32", borderColor: "#c8e6c9"}} title="Volver a activar este equipo">✅ Reactivar</button>
                     )}
-
                   </td>
                 </tr>
               ))}
@@ -589,31 +560,27 @@ export default function Inventory() {
 }
 
 // ==========================================
-// ESTILOS ADAPTADOS A VARIABLES GLOBALES
+// ESTILOS
 // ==========================================
 const styles = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "30px", flexWrap: "wrap", gap: "20px" },
   title: { margin: 0, fontSize: "28px", color: "var(--text-color)", transition: "0.3s" },
   subtitle: { margin: "5px 0 0 0", color: "var(--text-color)", opacity: 0.7, transition: "0.3s" },
   actions: { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" },
-
   exportGroup: { display: "flex", backgroundColor: "var(--card-bg)", borderRadius: "8px", border: "1px solid var(--border-color)", overflow: "hidden", transition: "0.3s" },
   selectFilter: { border: "none", padding: "12px 10px", outline: "none", backgroundColor: "transparent", color: "var(--text-color)", borderRight: "1px solid var(--border-color)", cursor: "pointer", fontSize: "14px" },
   datePickerContainer: { display: "flex", alignItems: "center", gap: "8px", padding: "0 10px", borderRight: "1px solid var(--border-color)", backgroundColor: "var(--bg-color)" },
   dateInput: { border: "1px solid var(--border-color)", borderRadius: "4px", padding: "5px", outline: "none", backgroundColor: "var(--card-bg)", color: "var(--text-color)", fontSize: "13px" },
   btnExportExcel: { backgroundColor: "#217346", color: "white", border: "none", padding: "12px 18px", cursor: "pointer", fontWeight: "600", transition: "0.2s" },
   btnExportPdf: { backgroundColor: "#d32f2f", color: "white", border: "none", padding: "12px 18px", borderRadius: "8px", cursor: "pointer", fontWeight: "600", transition: "0.2s" },
-
   searchContainer: { backgroundColor: "var(--card-bg)", padding: "12px 20px", borderRadius: "12px", display: "flex", alignItems: "center", marginBottom: "25px", border: "1px solid var(--border-color)", transition: "0.3s" },
   searchInput: { border: "none", outline: "none", width: "100%", fontSize: "16px", backgroundColor: "transparent", color: "var(--text-color)" },
-
   tableCard: { backgroundColor: "var(--card-bg)", borderRadius: "15px", border: "1px solid var(--border-color)", overflow: "hidden", boxShadow: "0 4px 6px rgba(0,0,0,0.02)", transition: "0.3s" },
   table: { width: "100%", borderCollapse: "collapse", textAlign: "left" },
   theadRow: { backgroundColor: "var(--bg-color)", borderBottom: "2px solid var(--border-color)", transition: "0.3s" },
   th: { padding: "18px 20px", fontSize: "13px", color: "var(--text-color)", opacity: 0.7, fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" },
   tr: { borderBottom: "1px solid var(--border-color)", transition: "0.2s" },
   td: { padding: "18px 20px", color: "var(--text-color)", fontSize: "15px" },
-
   statusBadge: { padding: "6px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "700", textTransform: "uppercase" },
   btnAction: { backgroundColor: "var(--bg-color)", color: "var(--text-color)", border: "1px solid var(--border-color)", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "bold", transition: "0.3s" },
   btnQr: { backgroundColor: "#5E35B1", color: "white", border: "none", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "bold" },
