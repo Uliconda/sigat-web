@@ -36,12 +36,11 @@ export default function Dashboard() {
     const unsubscribe = onSnapshot(collection(db, "Equipos"), (snapshot) => {
       const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      // 👇 NUEVO: Filtramos para quedarnos ÚNICAMENTE con los equipos reales
+      // Filtramos para quedarnos ÚNICAMENTE con los equipos reales
       const equiposReales = docs.filter(item => 
         !item.isTemplate && item.nombre?.toLowerCase() !== "plantilla sistema"
       );
       
-      // 👇 De aquí en adelante, usamos "equiposReales" en lugar de "docs"
       const disponibles = equiposReales.filter(i => i.estado?.toLowerCase() === "disponible").length;
       const prestados = equiposReales.filter(i => 
         ["prestado", "sin entregar"].includes(i.estado?.toLowerCase())
@@ -49,12 +48,16 @@ export default function Dashboard() {
       const fueraDeServicio = equiposReales.filter(i => i.estado?.toLowerCase() === "fuera de servicio").length;
       const faltas = equiposReales.filter(i => i.estado?.toLowerCase() === "no responde").length;
       
-      // 👇 El total ahora reflejará solo la longitud de equiposReales
       setMetrics({ total: equiposReales.length, disponibles, prestados, fueraDeServicio, faltas });
 
-      const equiposFuera = equiposReales.filter(i => 
-        ["prestado", "sin entregar", "no responde"].includes(i.estado?.toLowerCase())
-      );
+      // 👇 AQUÍ ESTÁ EL CAMBIO: Filtramos por estado y EXCLUIMOS a los ADMINISTRATIVOS
+      const equiposFuera = equiposReales.filter(i => {
+        const esPrestado = ["prestado", "sin entregar", "no responde"].includes(i.estado?.toLowerCase());
+        const noEsAdministrativo = i.categoria?.toUpperCase() !== "ADMINISTRATIVOS";
+        
+        return esPrestado && noEsAdministrativo; 
+      });
+      
       setPrestadosList(equiposFuera);
 
       setStatusData([
@@ -123,7 +126,18 @@ export default function Dashboard() {
 
       const ahora = new Date();
 
+      // 👇 NUEVO: Define aquí la categoría (o categorías) que quieres excluir.
+      // Escríbelas en MAYÚSCULAS para evitar errores de tipeo.
+      const categoriasExcluidas = ["ADMINISTRATIVO"];
+
       for (const item of prestadosList) {
+        
+        // 👇 NUEVO: Validamos si la categoría del equipo está en la lista de excluidas
+        const categoriaEquipo = item.categoria ? item.categoria.toUpperCase() : "";
+        if (categoriasExcluidas.includes(categoriaEquipo)) {
+          continue; // Si está en la lista, saltamos este equipo y no enviamos correo
+        }
+
         // Asume que guardas la fecha del préstamo como "fecha_prestamo" y que es un timestamp de Firebase o string
         if (item.estado?.toLowerCase() === "prestado" && item.fecha_prestamo && !item.alerta_enviada) {
           
@@ -183,7 +197,6 @@ export default function Dashboard() {
 
     verificarVencidos();
   }, [prestadosList]); // Revisa cada vez que cambia la lista de prestados
-
 
   // 3. FUNCIÓN MANEJO DE FALTAS MANUALES
   const handleToggleFalta = async (item) => {

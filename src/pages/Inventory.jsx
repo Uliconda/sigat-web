@@ -5,7 +5,7 @@ import { db } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
 import Sidebar from "../components/Sidebar";
 
-// Importamos librerías de reportes
+
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable"; 
@@ -248,7 +248,7 @@ export default function Inventory() {
   };
 
 // ==========================================
-  // 6. EXPORTAR EL HISTORIAL (EXCEL) CON SUB-CATEGORÍAS Y SUB-SUBCATEGORÍAS
+  // 6. EXPORTAR EL HISTORIAL (EXCEL) CON REGISTRO HISTÓRICO REAL
   // ==========================================
   const exportHistoryToExcel = async () => {
     try {
@@ -296,16 +296,52 @@ export default function Inventory() {
 
         const equipoInfo = equipos.find(e => e.id === data.idEquipo);
 
+        // 🌟 LÓGICA DE ESTADO HISTÓRICO: Determinamos qué estado tenía en ESE momento exacto
+        let estadoEnEseMomento = "DISPONIBLE";
+        let condicionEnEseMomento = "Buen estado";
+
+        const accionNormalizada = data.accion ? data.accion.toUpperCase() : "";
+        const obsNormalizada = data.observaciones ? data.observaciones.toUpperCase() : "";
+
+        if (accionNormalizada === "PRÉSTAMO") {
+          estadoEnEseMomento = "PRESTADO";
+          // En los préstamos usualmente no se evalúa condición física nueva, toma la que traía o "Buen estado"
+          condicionEnEseMomento = equipoInfo?.condicion_fisica || "Buen estado"; 
+        } 
+        else if (accionNormalizada === "BAJA") {
+          estadoEnEseMomento = "FUERA DE SERVICIO";
+          condicionEnEseMomento = "Reemplazar / Averiado";
+        } 
+        else if (accionNormalizada === "REACTIVACIÓN") {
+          estadoEnEseMomento = "DISPONIBLE";
+          condicionEnEseMomento = "Buen estado (Reparado)";
+        } 
+        else if (accionNormalizada === "DEVOLUCIÓN") {
+          estadoEnEseMomento = "DISPONIBLE";
+          
+          // 🌟 Mapeo inteligente de la condición física guardada en el texto de observaciones de la app móvil
+          if (obsNormalizada.includes("CONDICIÓN FÍSICA: ACEPTABLE") || obsNormalizada.includes("ACEPTABLE")) {
+            condicionEnEseMomento = "Aceptable";
+          } else if (obsNormalizada.includes("CONDICIÓN FÍSICA: REEMPLAZAR") || obsNormalizada.includes("REEMPLAZAR")) {
+            condicionEnEseMomento = "Reemplazar";
+          } else {
+            condicionEnEseMomento = "Buen estado";
+          }
+        }
+
         return {
           "Fecha y Hora": fechaLegible,
           "ID Equipo": data.idEquipo,
           "Nombre Equipo": data.nombreEquipo,
           "Categoría": equipoInfo?.categoria || "---",
-          "Subcategoría": equipoInfo?.subcategoria || "---",          // 👈 Tu 2do nivel
-          "Tipo (Sub-Sub)": equipoInfo?.subSubcategoria || "---",     // 👈 Tu 3er nivel (LAPTOPS y PC's)
-          "Acción": data.accion,
+          "Subcategoría": equipoInfo?.subcategoria || "---",          
+          "Tipo (Sub-Sub)": equipoInfo?.subSubcategoria || "---",     
+          // 🌟 AHORA MUESTRAN EL ESTADO Y CONDICIÓN DE ESE DÍA ESPECÍFICO
+          "Estado en ese Movimiento": estadoEnEseMomento,
+          "Condición Física en el registro": condicionEnEseMomento,
+          "Acción efectuada": data.accion,
           "Administrador": data.admin,
-          "Observaciones": data.observaciones,
+          "Observaciones del movimiento": data.observaciones,
         };
       });
 
@@ -412,19 +448,25 @@ export default function Inventory() {
 
     doc.text(tituloPDF, 14, 15);
 
-// Ajustamos las columnas para incluir la descripción
-    const tableColumn = ["ID", "Nombre / Modelo", "Categoría", "Sub.", "Sub-Sub", "Estado", "Usuario", "Descripción"]; // 👈 Se agregó Descripción al final
+// Ajustamos las columnas para incluir el poseedor
+    const tableColumn = ["ID", "Nombre / Modelo", "Categoría", "Sub.", "Sub-Sub", "Estado", "Usuario", "Poseedor"]; // 👈 Cambiamos "Descripción" por "Poseedor"
     
-    const tableRows = equiposAExportar.map((item) => [
-      item.id, 
-      item.nombre, 
-      item.categoria || "---", 
-      item.subcategoria || "---", 
-      item.subSubcategoria || "---", 
-      item.estado, 
-      item.usuarioActual || "---",
-      item.descripcion || "---", // 👈 Aquí jalamos el campo descripción de tu base de datos
-    ]);
+    const tableRows = equiposAExportar.map((item) => {
+      // Determinamos quién tiene el equipo o si está en almacén
+      const estadoActual = item.estado ? item.estado.toUpperCase() : "DISPONIBLE";
+      const poseedor = item.alumno_nombre || (estadoActual === "DISPONIBLE" ? "En almacén" : "Sin asignar");
+
+      return [
+        item.id, 
+        item.nombre, 
+        item.categoria || "---", 
+        item.subcategoria || "---", 
+        item.subSubcategoria || "---", 
+        item.estado, 
+        item.usuarioActual || "---",
+        poseedor // 👈 Aquí enviamos el nombre del poseedor o "En almacén"
+      ];
+    });
 
     autoTable(doc, {
       head: [tableColumn], 
@@ -432,9 +474,9 @@ export default function Inventory() {
       startY: 20, 
       theme: "grid", 
       headStyles: { fillColor: "#ff6600", textColor: "#fff" },
-      styles: { fontSize: 7.5, overflow: "linebreak" }, // 👈 Letra un pelín más chica y activamos salto de línea automático
+      styles: { fontSize: 7.5, overflow: "linebreak" }, 
       columnStyles: {
-        7: { cellWidth: 50 } // 👈 A la columna 7 (Descripción) le damos un ancho fijo para que no aplaste al resto
+        7: { cellWidth: 50 } // 👈 Mantenemos el ancho para la columna 7 (que ahora es Poseedor)
       }
     });
     
