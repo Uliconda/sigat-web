@@ -247,6 +247,43 @@ export default function Inventory() {
     }
   };
 
+  // ==========================================
+  // FUNCIÓN PARA EXPORTAR BASE DE DATOS PARA P-TOUCH (ETIQUETAS)
+  // ==========================================
+  const exportForPTouch = () => {
+    // 1. Definimos los encabezados de las columnas
+    let csvContent = "ID,Nombre_Equipo,No_Serie,Datos_QR\n";
+
+    // 2. Usamos filteredEquipos en lugar de equipos
+    filteredEquipos.forEach(item => {
+      // Ignoramos plantillas
+      if (item.isTemplate || item.nombre?.toLowerCase() === "plantilla sistema") return;
+
+      // Escapamos las comas reemplazándolas por espacios para no romper el CSV
+      const id = item.id || "";
+      const nombre = (item.nombre || "---").replace(/,/g, "");
+      const serie = (item.numeroSerie || "---").replace(/,/g, "");
+      
+      // Aquí defines qué es lo que lee tu QR
+      const datosQR = id; 
+
+      // Agregamos la fila al CSV
+      csvContent += `${id},${nombre},${serie},${datosQR}\n`;
+    });
+
+    // 3. Creamos y descargamos el archivo CSV
+    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "Inventario_Etiquetas_PTouch.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    Swal.fire("Exportado", "Archivo CSV generado para P-Touch Editor", "success");
+  };
+
 // ==========================================
   // 6. EXPORTAR EL HISTORIAL (EXCEL) CON REGISTRO HISTÓRICO REAL
   // ==========================================
@@ -359,35 +396,58 @@ export default function Inventory() {
   };
 
 // ==========================================
-  // 7. FUNCIÓN PARA EXPORTAR A PDF (CON SELECTOR DE LOS 3 NIVELES)
+  // 7. FUNCIÓN PARA EXPORTAR A PDF (CON SELECTOR AGRUPADO ORDENADO)
   // ==========================================
   const exportToPDF = async () => {
     const inputOptions = {
-      "Todo": "Todo el inventario (Completo)"
+      "General": {
+        "Todo": "🌟 Todo el inventario (Completo)"
+      }
     };
     
-    // Construimos dinámicamente las opciones del menú basadas en los equipos reales
-    equipos.forEach(item => {
+    // ✨ LA SOLUCIÓN: Ordenamos el inventario jerárquicamente antes de agrupar.
+    // Esto asegura que cada hijo se inserte justo después de su padre.
+    const equiposOrdenados = [...equipos].sort((a, b) => {
+      const catA = (a.categoria || "").toUpperCase();
+      const catB = (b.categoria || "").toUpperCase();
+      if (catA !== catB) return catA.localeCompare(catB);
+
+      const subA = (a.subcategoria || "").toUpperCase();
+      const subB = (b.subcategoria || "").toUpperCase();
+      if (subA !== subB) return subA.localeCompare(subB);
+
+      const subSubA = (a.subSubcategoria || "").toUpperCase();
+      const subSubB = (b.subSubcategoria || "").toUpperCase();
+      return subSubA.localeCompare(subSubB);
+    });
+
+    // Usamos el nuevo arreglo "equiposOrdenados" en lugar del original
+    equiposOrdenados.forEach(item => {
       if (item.isTemplate || item.nombre?.toLowerCase() === "plantilla sistema") return;
       
-      if (item.categoria) {
-        // 1. Nivel Categoría (Este se queda igual para que puedas seleccionar la carpeta principal)
-        if (!inputOptions[item.categoria]) {
-          inputOptions[item.categoria] = `📁 Todo ${item.categoria}`;
+      const cat = item.categoria;
+      const sub = item.subcategoria;
+      const subSub = item.subSubcategoria;
+
+      if (cat) {
+        // 1. Nivel Categoría
+        if (!inputOptions[cat]) {
+          inputOptions[cat] = {};
+          inputOptions[cat][cat] = `📁 ${cat} (Completo)`;
         }
         
-        // 2. Nivel Subcategoría (AQUÍ ESTÁ LA MAGIA: Ignoramos si dice "GENERAL")
-        if (item.subcategoria && item.subcategoria.toUpperCase() !== "GENERAL") {
-          const claveSub = `${item.categoria}|${item.subcategoria}`;
-          if (!inputOptions[claveSub]) {
-            inputOptions[claveSub] = `   ↳ Todo ${item.subcategoria}`;
+        // 2. Nivel Subcategoría
+        if (sub && sub.toUpperCase() !== "GENERAL") {
+          const claveSub = `${cat}|${sub}`;
+          if (!inputOptions[cat][claveSub]) {
+            inputOptions[cat][claveSub] = ` ↳ ${cat} solo ${sub}`;
           }
           
-          // 3. Nivel Sub-Subcategoría (También ignoramos si dice "GENERAL")
-          if (item.subSubcategoria && item.subSubcategoria.toUpperCase() !== "GENERAL") {
-            const claveSubSub = `${item.categoria}|${item.subcategoria}|${item.subSubcategoria}`;
-            if (!inputOptions[claveSubSub]) {
-              inputOptions[claveSubSub] = `      - Solo ${item.subSubcategoria}`;
+          // 3. Nivel Sub-Subcategoría
+          if (subSub && subSub.toUpperCase() !== "GENERAL") {
+            const claveSubSub = `${cat}|${sub}|${subSub}`;
+            if (!inputOptions[cat][claveSubSub]) {
+              inputOptions[cat][claveSubSub] = `    • ${sub} > solo ${subSub}`;
             }
           }
         }
@@ -419,17 +479,14 @@ export default function Inventory() {
       const parts = seleccion.split("|");
       
       if (parts.length === 3) {
-        // Eligió hasta la Sub-Subcategoría (Ej. ADMINISTRATIVOS > COBRANZA > LAPTOPS)
         equiposAExportar = filteredEquipos.filter(item => item.categoria === parts[0] && item.subcategoria === parts[1] && item.subSubcategoria === parts[2]);
         tituloSecundario = `${parts[0]} > ${parts[1]} > ${parts[2]}`;
       } 
       else if (parts.length === 2) {
-        // Eligió hasta la Subcategoría (Ej. ADMINISTRATIVOS > COBRANZA)
         equiposAExportar = filteredEquipos.filter(item => item.categoria === parts[0] && item.subcategoria === parts[1]);
         tituloSecundario = `${parts[0]} > ${parts[1]}`;
       } 
       else {
-        // Eligió la categoría principal completa
         equiposAExportar = filteredEquipos.filter(item => item.categoria === parts[0]);
         tituloSecundario = `${parts[0]} (Completo)`;
       }
@@ -440,7 +497,7 @@ export default function Inventory() {
       return;
     }
 
-    const doc = new jsPDF("landscape"); // 👈 Lo cambié a horizontal para que quepan bien todas tus columnas
+    const doc = new jsPDF("landscape");
     
     const tituloPDF = seleccion === "Todo" 
       ? "Estado Actual del Inventario - SIGAT (Completo)"
@@ -448,23 +505,34 @@ export default function Inventory() {
 
     doc.text(tituloPDF, 14, 15);
 
-// Ajustamos las columnas para incluir el poseedor
-    const tableColumn = ["ID", "Nombre / Modelo", "Categoría", "Sub.", "Sub-Sub", "Estado", "Usuario", "Poseedor"]; // 👈 Cambiamos "Descripción" por "Poseedor"
+    // 1. Añadimos "No. Serie" a los encabezados
+    const tableColumn = [
+      "ID", 
+      "Nombre / Modelo", 
+      "No. Serie", // 👈 Nueva columna agregada
+      "Categoría", 
+      "Sub.", 
+      "Sub-Sub", 
+      "Estado", 
+      "Usuario", 
+      "Poseedor"
+    ];
     
+    // 2. Extraemos el número de serie de los datos del equipo
     const tableRows = equiposAExportar.map((item) => {
-      // Determinamos quién tiene el equipo o si está en almacén
       const estadoActual = item.estado ? item.estado.toUpperCase() : "DISPONIBLE";
       const poseedor = item.alumno_nombre || (estadoActual === "DISPONIBLE" ? "En almacén" : "Sin asignar");
 
       return [
         item.id, 
         item.nombre, 
+        item.no_serie || "---", // 👈 Asegúrate de que el nombre de esta propiedad ("numeroSerie") coincida con el de tu base de datos/estado
         item.categoria || "---", 
         item.subcategoria || "---", 
         item.subSubcategoria || "---", 
         item.estado, 
         item.usuarioActual || "---",
-        poseedor // 👈 Aquí enviamos el nombre del poseedor o "En almacén"
+        poseedor 
       ];
     });
 
@@ -476,7 +544,8 @@ export default function Inventory() {
       headStyles: { fillColor: "#ff6600", textColor: "#fff" },
       styles: { fontSize: 7.5, overflow: "linebreak" }, 
       columnStyles: {
-        7: { cellWidth: 50 } // 👈 Mantenemos el ancho para la columna 7 (que ahora es Poseedor)
+        // 3. ¡Importante! Cambiamos el índice a 8, porque ahora "Poseedor" es la columna número 8 (empezando desde el 0)
+        8: { cellWidth: 50 } 
       }
     });
     
@@ -523,6 +592,13 @@ export default function Inventory() {
             </div>
             
             <button onClick={exportToPDF} style={styles.btnExportPdf}>📄 PDF Vista Actual</button>
+            {/* Nuevo botón para P-Touch */}
+              <button 
+                onClick={exportForPTouch} 
+                style={{...styles.btnExportPdf, backgroundColor: "#0052cc"}} // Color azul para diferenciarlo
+              >
+                🖨️ Exportar Base de datos
+              </button>
           </div>
         </header>
 
@@ -600,6 +676,8 @@ export default function Inventory() {
     </div>
   );
 }
+
+
 
 // ==========================================
 // ESTILOS

@@ -44,13 +44,14 @@ const date = value.toDate ? value.toDate() : new Date(value);
 const diffMs = Date.now() - date.getTime();
 const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-if (diffDays > 90) {
+if (diffDays > 360) {
     return { status: "Urgente", color: "#ff4444", bgColor: "rgba(255, 68, 68, 0.1)" };
 }
-if (diffDays > 60) {
-    return { status: "Próxima revisión", color: "#ffcc00", bgColor: "rgba(255, 204, 0, 0.1)" };
+if (diffDays > 90) {
+    return { status: "Ir revisando estado del equipo", color: "#ffcc00", bgColor: "rgba(255, 204, 0, 0.1)" };
 }
 return { status: "En tiempo", color: "#4caf50", bgColor: "rgba(76, 175, 80, 0.1)" };
+
 };
 
 const handleSchedule = async (item) => {
