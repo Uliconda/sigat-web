@@ -1,14 +1,20 @@
-// src/pages/Maintenance.jsx
+// src/pages/Maintenance.tsx
 import { useEffect, useState } from 'react';
 import Sidebar from "../components/Sidebar";
 import Swal from "sweetalert2";
 import { addHistorial, getEquipos, updateEquipo } from "../services/supabaseData";
 import { useAuth } from "../context/useAuth";
+import type { Equipo } from "../types";
 import { mensajeDeError } from "../utils/errores";
 import "./Maintenance.css";
 
+type TonoAlerta = "exito" | "aviso" | "peligro";
+
+// Algunos equipos antiguos guardaban el nombre en "name".
+const nombreDe = (item: Equipo): string => String(item.nombre ?? item.name ?? "");
+
 const Maintenance = () => {
-const [maintenanceAlerts, setMaintenanceAlerts] = useState([]);
+const [maintenanceAlerts, setMaintenanceAlerts] = useState<Equipo[]>([]);
 const [currentTime] = useState(() => Date.now());
 const { userData } = useAuth(); // Extraemos los datos del usuario activo
 
@@ -24,7 +30,7 @@ const fetchMaintenanceAlerts = async () => {
 fetchMaintenanceAlerts();
 }, []);
 
-const formatDate = (value) => {
+const formatDate = (value?: string) => {
 if (!value) return "Sin revisión";
 const date = new Date(value);
 return new Intl.DateTimeFormat("es-MX", {
@@ -36,7 +42,7 @@ return new Intl.DateTimeFormat("es-MX", {
 }).format(date);
 };
 
-const getAlertStatus = (value) => {
+const getAlertStatus = (value?: string): { status: string; tono: TonoAlerta } => {
 if (!value) {
     return { status: "Pendiente", tono: "aviso" };
 }
@@ -55,11 +61,11 @@ return { status: "En tiempo", tono: "exito" };
 
 };
 
-const handleSchedule = async (item) => {
+const handleSchedule = async (item: Equipo) => {
 // SweetAlert simplificado e idéntico al de Inventory
 const { value: observacion, isConfirmed } = await Swal.fire({
     title: 'Registrar Mantenimiento',
-    text: `Detalla el mantenimiento realizado al equipo "${item.nombre || item.name || item.id}":`,
+    text: `Detalla el mantenimiento realizado al equipo "${nombreDe(item) || item.id}":`,
     icon: 'info',
     input: 'textarea',
     inputPlaceholder: 'Ej. Limpieza general, cambio de piezas, ajuste de cableado...',
@@ -86,7 +92,7 @@ try {
     // 2. Registramos en el Historial (Formato idéntico al Inventario para que salga en el Excel)
     await addHistorial({
     idEquipo: item.id,
-    nombreEquipo: item.nombre || item.name || "Sin Nombre",
+    nombreEquipo: nombreDe(item) || "Sin Nombre",
     accion: "MANTENIMIENTO",
     fecha: new Date(), // Usamos Date para mantener compatibilidad con tu Excel
     admin: userData?.nombre || "Usuario Web",
@@ -147,7 +153,7 @@ return (
             return (
                 <tr key={item.id}>
                 <td className="negrita">{item.id}</td>
-                <td>{item.nombre || item.name}</td>
+                <td>{nombreDe(item)}</td>
                 <td>{formatDate(item.fecha_revision || item.lastCheck)}</td>
                 <td>
                     <span className={`etiqueta etiqueta--${tono}`}>{status}</span>
