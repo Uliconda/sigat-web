@@ -1,5 +1,5 @@
-// src/pages/Login.jsx
-import { useEffect, useState } from "react";
+// src/pages/Login.tsx
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../config/supabase";
 import { getProfile } from "../services/supabaseData";
@@ -50,7 +50,7 @@ useEffect(() => {
     };
 }, []);
 
-const handleLogin = async (e) => {
+const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
 e.preventDefault(); // Evita que la página se recargue al enviar el formulario
 setError("");
 setLoading(true);
@@ -83,7 +83,7 @@ try {
 }
 };
 
-const handleResetPassword = async (e) => {
+const handleResetPassword = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     setLoading(true);
@@ -101,7 +101,7 @@ const handleResetPassword = async (e) => {
     }
 };
 
-const handleNewPassword = async (e) => {
+const handleNewPassword = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     setLoading(true);
