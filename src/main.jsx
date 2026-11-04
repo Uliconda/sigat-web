@@ -3,6 +3,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import './index.css';
+import './styles/componentes.css';
 
 // 1. Importamos nuestros Providers
 import { AuthProvider } from './context/AuthContext.jsx'; 

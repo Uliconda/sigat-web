@@ -1,0 +1,8 @@
+.mantenimiento-tabla {
+  --tabla-ancho-minimo: 640px;
+}
+
+.tabla .mantenimiento-observacion {
+  max-width: 200px;
+  opacity: 0.8;
+}

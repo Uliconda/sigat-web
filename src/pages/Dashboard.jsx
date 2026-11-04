@@ -13,6 +13,7 @@ import { ThemeContext } from "../context/theme";
 import Sidebar from "../components/Sidebar";
 import Swal from 'sweetalert2'; 
 import { mensajeDeError } from "../utils/errores";
+import "./Dashboard.css";
 import { 
   PieChart, Pie, Cell, 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -186,52 +187,58 @@ export default function Dashboard() {
     }
   };
 
+  const tarjetas = [
+    { clave: "total", etiqueta: "Total", icono: "📦", valor: metrics.total },
+    { clave: "disponibles", etiqueta: "Disponibles", icono: "✅", valor: metrics.disponibles },
+    { clave: "prestados", etiqueta: "Prestados", icono: "🔄", valor: metrics.prestados },
+    { clave: "faltas", etiqueta: "Faltas", icono: "⚠️", valor: metrics.faltas },
+  ];
+
   return (
     <div className="app-layout">
       <Sidebar />
       <main className="app-main">
-        
+
         {/* HEADER */}
-        <header style={styles.header}>
+        <header className="pagina-encabezado dashboard-encabezado">
           <div>
-            <h1 style={styles.title}>Panel de Control</h1>
-            <p style={styles.subtitle}>Bienvenido, <b>{userData?.nombre}</b></p>
+            <h1 className="pagina-titulo">Panel de Control</h1>
+            <p className="pagina-subtitulo">Bienvenido, <b>{userData?.nombre}</b></p>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-            <div style={styles.dateBox}>Hoy: {new Date().toLocaleDateString()}</div>
-            <button onClick={toggleTheme} style={styles.themeButton} aria-label={theme === "light" ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}>{theme === "light" ? "🌙" : "☀️"}</button>
+          <div className="dashboard-encabezado__extras">
+            <div className="dashboard-fecha">Hoy: {new Date().toLocaleDateString()}</div>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="dashboard-tema"
+              aria-label={theme === "light" ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
+            >
+              {theme === "light" ? "🌙" : "☀️"}
+            </button>
           </div>
         </header>
 
         {/* METRICAS RAPIDAS */}
-          <div style={styles.grid}>
-            <div style={styles.card}>
-              <div style={{...styles.iconCircle, backgroundColor: '#e3f2fd', color: '#1976d2'}}>📦</div>
-              <div><p style={styles.cardLabel}>Total</p><h3 style={styles.cardNumber}>{metrics.total}</h3></div>
+        <div className="dashboard-metricas">
+          {tarjetas.map((tarjeta) => (
+            <div key={tarjeta.clave} className="dashboard-metrica">
+              <div className={`dashboard-metrica__icono dashboard-metrica__icono--${tarjeta.clave}`} aria-hidden="true">
+                {tarjeta.icono}
+              </div>
+              <div>
+                <p className="dashboard-metrica__etiqueta">{tarjeta.etiqueta}</p>
+                <h3 className="dashboard-metrica__valor">{tarjeta.valor}</h3>
+              </div>
             </div>
-            
-            <div style={styles.card}>
-              <div style={{...styles.iconCircle, backgroundColor: '#e8f5e9', color: '#2e7d32'}}>✅</div>
-              <div><p style={styles.cardLabel}>Disponibles</p><h3 style={styles.cardNumber}>{metrics.disponibles}</h3></div>
-            </div>
-
-            <div style={styles.card}>
-              <div style={{...styles.iconCircle, backgroundColor: '#fff3e0', color: '#ef6c00'}}>🔄</div>
-              <div><p style={styles.cardLabel}>Prestados</p><h3 style={styles.cardNumber}>{metrics.prestados}</h3></div>
-            </div>
-
-            <div style={styles.card}>
-              <div style={{...styles.iconCircle, backgroundColor: '#fce4ec', color: '#ad1457'}}>⚠️</div>
-              <div><p style={styles.cardLabel}>Faltas</p><h3 style={styles.cardNumber}>{metrics.faltas}</h3></div>
-            </div>
-          </div>
+          ))}
+        </div>
 
         {/* SECCIÓN ESTADÍSTICAS */}
-        <h2 style={{...styles.chartTitle, marginTop: '20px'}}>Métricas de Uso</h2>
-        <div style={styles.chartsContainer}>
-          <div style={styles.chartCard}>
-            <h3 style={styles.chartTitle}>Top 5: Equipos más pedidos <small style={{ opacity: 0.6, fontWeight: 400 }}>(últimos {DIAS_HISTORIAL_DASHBOARD} días)</small></h3>
-            <div style={{ height: 250 }}>
+        <h2 className="dashboard-seccion">Métricas de Uso</h2>
+        <div className="dashboard-graficas">
+          <div className="tarjeta dashboard-grafica">
+            <h3 className="dashboard-grafica__titulo">Top 5: Equipos más pedidos <small>(últimos {DIAS_HISTORIAL_DASHBOARD} días)</small></h3>
+            <div className="dashboard-grafica__lienzo">
               <ResponsiveContainer>
                 <BarChart data={topEquipos}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
@@ -244,9 +251,9 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div style={styles.chartCard}>
-            <h3 style={styles.chartTitle}>Horarios Pico (Préstamos) <small style={{ opacity: 0.6, fontWeight: 400 }}>(últimos {DIAS_HISTORIAL_DASHBOARD} días)</small></h3>
-            <div style={{ height: 250 }}>
+          <div className="tarjeta dashboard-grafica">
+            <h3 className="dashboard-grafica__titulo">Horarios Pico (Préstamos) <small>(últimos {DIAS_HISTORIAL_DASHBOARD} días)</small></h3>
+            <div className="dashboard-grafica__lienzo">
               <ResponsiveContainer>
                 <LineChart data={horariosPico}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
@@ -261,88 +268,85 @@ export default function Dashboard() {
         </div>
 
         {/* GRAFICAS DE ESTADO E INVENTARIO */}
-        <div style={styles.chartsContainer}>
-          <div style={styles.chartCard}>
-              <h3 style={styles.chartTitle}>Distribución de Estados</h3>
-              <div style={{height: 250}}>
-                <ResponsiveContainer>
-                  <PieChart>
-                    <Pie data={statusData} innerRadius={60} outerRadius={80} dataKey="value" nameKey="name">
-                      {statusData.map((e, i) => <Cell key={i} fill={STATUS_COLORS[i % STATUS_COLORS.length]}/>)}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+        <div className="dashboard-graficas">
+          <div className="tarjeta dashboard-grafica">
+            <h3 className="dashboard-grafica__titulo">Distribución de Estados</h3>
+            <div className="dashboard-grafica__lienzo">
+              <ResponsiveContainer>
+                <PieChart>
+                  <Pie data={statusData} innerRadius={60} outerRadius={80} dataKey="value" nameKey="name">
+                    {statusData.map((e, i) => <Cell key={i} fill={STATUS_COLORS[i % STATUS_COLORS.length]}/>)}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div style={styles.chartCard}>
-              <h3 style={styles.chartTitle}>Equipos por Categoría</h3>
-              <div style={{height: 250}}>
-                <ResponsiveContainer>
-                  <BarChart data={categoryData}>
-                    <XAxis dataKey="categoria" tick={{fill: 'var(--text-color)'}}/>
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="cantidad" fill="#ff6600" radius={4} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+          <div className="tarjeta dashboard-grafica">
+            <h3 className="dashboard-grafica__titulo">Equipos por Categoría</h3>
+            <div className="dashboard-grafica__lienzo">
+              <ResponsiveContainer>
+                <BarChart data={categoryData}>
+                  <XAxis dataKey="categoria" tick={{fill: 'var(--text-color)'}}/>
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="cantidad" fill="#ff6600" radius={4} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
 
         {/* TABLA DE PRESTADOS */}
-        <div style={styles.listContainer}>
-          <h3 style={styles.chartTitle}>⚠️ Equipos en Posesión ({prestadosList.length})</h3>
-          <div style={styles.tableWrapper}>
-            <table style={styles.table}>
+        <div className="tarjeta">
+          <h3 className="dashboard-grafica__titulo">⚠️ Equipos en Posesión ({prestadosList.length})</h3>
+          <div className="tabla-scroll">
+            <table className="dashboard-tabla">
               <thead>
-                <tr style={styles.theadRow}>
-                  <th style={styles.th}>ID</th>
-                  <th style={styles.th}>Equipo</th>
-                  <th style={styles.th}>Poseedor</th>
-                  <th style={styles.th}>Estado</th>
-                  <th style={styles.th}>Acción</th>
+                <tr>
+                  <th>ID</th>
+                  <th>Equipo</th>
+                  <th>Poseedor</th>
+                  <th>Estado</th>
+                  <th>Acción</th>
                 </tr>
               </thead>
               <tbody>
-                {prestadosList.map(item => (
-                  <tr key={item.id} style={styles.tr}>
-                    <td style={styles.td}>{item.id_qr || item.id}</td>
-                    <td style={styles.td}>{item.nombre}</td>
-                    <td style={styles.td}>{item.poseedor_actual || "Anónimo"}</td>
-                    <td style={styles.td}>
-                      <span style={{
-                        ...styles.statusBadge, 
-                        backgroundColor: item.estado?.toLowerCase() === 'no responde' ? '#fce4ec' : '#fff3e0',
-                        color: item.estado?.toLowerCase() === 'no responde' ? '#ad1457' : '#ef6c00'
-                      }}>
-                        {item.estado}
-                      </span>
-                    </td>
-                    <td style={styles.td}>
-                      <div style={{ display: "flex", gap: "10px" }}>
-                        {/* Botón principal de Falta */}
-                        <button onClick={() => handleToggleFalta(item)} style={{
-                          ...styles.actionBtn,
-                          backgroundColor: item.estado?.toLowerCase() === 'no responde' ? "#616161" : "#ad1457"
-                        }}>
-                          {item.estado?.toLowerCase() === 'no responde' ? "Quitar Falta" : "Marcar Falta"}
-                        </button>
-                        
-                        {/* NUEVO: Botón de Reenviar Correo (sólo visible si ya es Falta, opcional quitar la condición para que salga siempre) */}
-                        {item.estado?.toLowerCase() === 'no responde' && (
-                          <button onClick={() => handleResendEmail(item)} style={{
-                            ...styles.actionBtn,
-                            backgroundColor: "#1976d2"
-                          }}>
-                            Reenviar ✉️
+                {prestadosList.map(item => {
+                  const tieneFalta = item.estado?.toLowerCase() === 'no responde';
+                  return (
+                    <tr key={item.id}>
+                      <td>{item.id_qr || item.id}</td>
+                      <td>{item.nombre}</td>
+                      <td>{item.poseedor_actual || "Anónimo"}</td>
+                      <td>
+                        <span className={`dashboard-estado${tieneFalta ? " dashboard-estado--falta" : ""}`}>
+                          {item.estado}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="dashboard-acciones">
+                          {/* Botón principal de Falta */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleFalta(item)}
+                            className={`dashboard-accion ${tieneFalta ? "dashboard-accion--quitar" : "dashboard-accion--marcar"}`}
+                          >
+                            {tieneFalta ? "Quitar Falta" : "Marcar Falta"}
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+
+                          {/* Reenviar correo: solo cuando ya es falta */}
+                          {tieneFalta && (
+                            <button type="button" onClick={() => handleResendEmail(item)} className="dashboard-accion dashboard-accion--reenviar">
+                              Reenviar ✉️
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -351,28 +355,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
-const styles = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "30px" },
-  title: { margin: 0, fontSize: "26px", color: "var(--text-color)" },
-  subtitle: { margin: 0, opacity: 0.7, color: "var(--text-color)" },
-  dateBox: { backgroundColor: "var(--card-bg)", padding: "8px 15px", borderRadius: "8px", border: "1px solid var(--border-color)", color: "var(--text-color)" },
-  themeButton: { background: "none", border: "1px solid var(--border-color)", borderRadius: "50%", cursor: "pointer", width: "40px", height: "40px", flexShrink: 0 },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))", gap: "16px", marginBottom: "20px" },
-  card: { backgroundColor: "var(--card-bg)", padding: "20px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "15px", border: "1px solid var(--border-color)" },
-  iconCircle: { width: "45px", height: "45px", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" },
-  cardLabel: { margin: 0, fontSize: "12px", opacity: 0.6, color: "var(--text-color)" },
-  cardNumber: { margin: 0, fontSize: "24px", color: "var(--text-color)" },
-  chartsContainer: { display: "flex", gap: "20px", flexWrap: "wrap", marginBottom: "20px" },
-  chartCard: { flex: 1, minWidth: "min(100%, 340px)", backgroundColor: "var(--card-bg)", padding: "20px", borderRadius: "12px", border: "1px solid var(--border-color)" },
-  chartTitle: { margin: "0 0 15px 0", fontSize: "16px", color: "var(--text-color)" },
-  listContainer: { backgroundColor: "var(--card-bg)", padding: "20px", borderRadius: "12px", border: "1px solid var(--border-color)" },
-  tableWrapper: { overflowX: "auto" },
-  table: { width: "100%", borderCollapse: "collapse" },
-  theadRow: { borderBottom: "2px solid var(--border-color)", textAlign: "left" },
-  th: { padding: "12px", fontSize: "12px", color: "var(--text-color)", opacity: 0.6 },
-  tr: { borderBottom: "1px solid var(--border-color)" },
-  td: { padding: "12px", fontSize: "13px", color: "var(--text-color)", whiteSpace: "nowrap" },
-  statusBadge: { padding: "4px 10px", borderRadius: "12px", fontSize: "10px", fontWeight: "bold" },
-  actionBtn: { border: "none", color: "white", padding: "5px 10px", borderRadius: "6px", cursor: "pointer", fontSize: "11px" }
-};

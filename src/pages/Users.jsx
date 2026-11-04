@@ -10,6 +10,7 @@ import Swal from "sweetalert2";
 import { useAuth } from "../context/useAuth";
 import { escapeHtml } from "../utils/html";
 import { errorDeFuncion, mensajeDeError } from "../utils/errores";
+import "./Users.css";
 
 export default function Users() {
 // EXTRAEMOS user (para el ID) Y userData (para el rol)
@@ -213,24 +214,27 @@ if (result.isConfirmed) {
 };
 
 return (
-// Cambiamos el fondo general
 <div className="app-layout">
     <Sidebar />
 
     <main className="app-main usuarios-main">
 
-    <div style={{ flex: 2, minWidth: 0 }}>
-        <h1 style={styles.title}>Gestión de Usuarios</h1>
-        <p style={styles.subtitle}>Lista de personas con acceso al sistema</p>
+    <section className="usuarios-lista">
+        <header className="pagina-encabezado usuarios-encabezado">
+        <div>
+            <h1 className="pagina-titulo">Gestión de Usuarios</h1>
+            <p className="pagina-subtitulo">Lista de personas con acceso al sistema</p>
+        </div>
+        </header>
 
-        <div style={styles.tableCard}>
-        <table style={styles.table}>
+        <div className="tabla-tarjeta usuarios-tabla-tarjeta">
+        <table className="tabla usuarios-tabla">
             <thead>
-            <tr style={styles.theadRow}>
-                <th style={styles.th}>Nombre</th>
-                <th style={styles.th}>Email</th>
-                <th style={styles.th}>Rol</th>
-                <th style={{ ...styles.th, textAlign: "center" }}>Acciones</th>
+            <tr>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th className="centrado">Acciones</th>
             </tr>
             </thead>
             <tbody>
@@ -238,75 +242,73 @@ return (
             {users
                 .filter((u) => userData?.rol === "superadmin" || u.rol !== "superadmin")
                 .map((u) => (
-                <tr key={u.id} style={styles.tr}>
-                <td style={styles.td}><b>{u.nombre}</b></td>
-                <td style={styles.td}>{u.email}</td>
-                <td style={styles.td}>
-                    <span style={{
-                        ...styles.badge,
-                        backgroundColor: u.rol === "admin" ? "#fff3e0" : u.rol === "superadmin" ? "#fce4ec" : "#e3f2fd",
-                        color: u.rol === "admin" ? "#e65100" : u.rol === "superadmin" ? "#c2185b" : "#1565c0"
-                    }}>
-                        {u.rol}
-                    </span>
+                <tr key={u.id}>
+                <td className="negrita">{u.nombre}</td>
+                <td>{u.email}</td>
+                <td>
+                    <span className={`usuarios-rol usuarios-rol--${u.rol}`}>{u.rol}</span>
                 </td>
-                
-                <td style={{ ...styles.td, textAlign: "center", display: "flex", gap: "8px", justifyContent: "center" }}>
-                    
+
+                <td className="centrado">
+                    <div className="usuarios-acciones">
                     {/* Botón de Editar: Se oculta para el propio Super Admin */}
                     {(userData?.rol === "admin" || userData?.rol === "superadmin") && !(userData?.rol === "superadmin" && u.id === user.id) && (
-                        <button onClick={() => handleEditUser(u)} style={styles.btnEdit}>
+                        <button type="button" onClick={() => handleEditUser(u)} className="usuarios-boton usuarios-boton--editar">
                         Editar
                         </button>
                     )}
 
                     {/* Botón de Eliminar condicionado por rol Y bloqueando la cuenta propia */}
                     {u.id !== user.id && (userData?.rol === "superadmin" || (userData?.rol === "admin" && u.rol === "usuario")) && (
-                        <button onClick={() => handleDeleteUser(u)} style={styles.btnDelete}>
+                        <button type="button" onClick={() => handleDeleteUser(u)} className="usuarios-boton usuarios-boton--borrar">
                         Borrar
                         </button>
                     )}
-
+                    </div>
                 </td>
                 </tr>
             ))}
             </tbody>
         </table>
         </div>
-    </div>
+    </section>
 
-    <div style={{ flex: 1 }}>
-        <div style={styles.formCard}>
-        <h3 style={{ marginTop: 0 }}>Registrar Nuevo</h3>
-        <form onSubmit={handleCreateUser} style={styles.form}>
-            <div style={styles.inputGroup}>
-            <label>Nombre Completo</label>
+    <section className="usuarios-registro">
+        <div className="tarjeta usuarios-formulario-tarjeta">
+        <h3>Registrar Nuevo</h3>
+        <form onSubmit={handleCreateUser} className="usuarios-formulario">
+            <div className="usuarios-campo">
+            <label htmlFor="nuevo-nombre">Nombre Completo</label>
             <input
-                type="text" required style={styles.input}
+                id="nuevo-nombre"
+                type="text" required className="usuarios-input"
                 value={formData.nombre}
                 onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
             />
             </div>
-            <div style={styles.inputGroup}>
-            <label>Correo Electrónico</label>
+            <div className="usuarios-campo">
+            <label htmlFor="nuevo-email">Correo Electrónico</label>
             <input
-                type="email" required style={styles.input}
+                id="nuevo-email"
+                type="email" required className="usuarios-input"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             />
             </div>
-            <div style={styles.inputGroup}>
-            <label>Contraseña Provisional</label>
+            <div className="usuarios-campo">
+            <label htmlFor="nuevo-password">Contraseña Provisional</label>
             <input
-                type="password" required minLength={8} style={styles.input}
+                id="nuevo-password"
+                type="password" required minLength={8} className="usuarios-input"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             />
             </div>
-            <div style={styles.inputGroup}>
-            <label>Rol del Usuario</label>
+            <div className="usuarios-campo">
+            <label htmlFor="nuevo-rol">Rol del Usuario</label>
             <select
-                style={styles.input}
+                id="nuevo-rol"
+                className="usuarios-input"
                 value={formData.rol}
                 onChange={(e) => setFormData({ ...formData, rol: e.target.value })}
             >
@@ -319,40 +321,14 @@ return (
                 )}
             </select>
             </div>
-            <button type="submit" disabled={loading} style={styles.btnSubmit}>
+            <button type="submit" disabled={loading} className="usuarios-crear">
             {loading ? "Registrando..." : "Crear Cuenta"}
             </button>
         </form>
         </div>
-    </div>
+    </section>
 
     </main>
 </div>
 );
 }
-
-// ==========================================
-// ESTILOS ADAPTADOS AL MODO OSCURO
-// ==========================================
-const styles = {
-title: { margin: 0, fontSize: "clamp(22px, 5vw, 28px)", color: "var(--text-color)", transition: "0.3s" },
-subtitle: { color: "var(--text-color)", opacity: 0.7, marginBottom: "30px", transition: "0.3s" },
-
-tableCard: { backgroundColor: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", overflowX: "auto", WebkitOverflowScrolling: "touch", transition: "0.3s" },
-table: { width: "100%", minWidth: "560px", borderCollapse: "collapse" },
-theadRow: { backgroundColor: "var(--bg-color)", borderBottom: "2px solid var(--border-color)", transition: "0.3s" },
-th: { padding: "15px 20px", textAlign: "left", color: "var(--text-color)", opacity: 0.7, fontSize: "12px", textTransform: "uppercase" },
-tr: { borderBottom: "1px solid var(--border-color)", transition: "0.3s" },
-td: { padding: "15px 20px", fontSize: "14px", verticalAlign: "middle", color: "var(--text-color)" },
-
-badge: { padding: "4px 10px", borderRadius: "12px", fontSize: "11px", fontWeight: "bold", textTransform: "uppercase" },
-
-formCard: { backgroundColor: "var(--card-bg)", padding: "25px", borderRadius: "12px", border: "1px solid var(--border-color)", boxShadow: "0 4px 10px rgba(0,0,0,0.03)", transition: "0.3s", color: "var(--text-color)" },
-form: { display: "flex", flexDirection: "column", gap: "15px" },
-inputGroup: { display: "flex", flexDirection: "column", gap: "5px", color: "var(--text-color)" },
-input: { padding: "10px", borderRadius: "6px", border: "1px solid var(--border-color)", fontSize: "14px", backgroundColor: "transparent", color: "var(--text-color)", transition: "0.3s" },
-
-btnSubmit: { backgroundColor: "#ff6600", color: "white", border: "none", padding: "12px", borderRadius: "6px", fontWeight: "bold", cursor: "pointer", marginTop: "10px", transition: "0.3s" },
-btnEdit: { backgroundColor: "#ffc107", color: "#000", border: "none", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", fontSize: "12px", transition: "0.3s" },
-btnDelete: { backgroundColor: "#d32f2f", color: "white", border: "none", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", fontSize: "12px", transition: "0.3s" }
-};
