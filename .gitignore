@@ -27,3 +27,9 @@ service-account*.json
 *.njsproj
 *.sln
 *.sw?
+
+# Datos locales (bases de prueba)
+server/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
