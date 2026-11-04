@@ -1,0 +1,4 @@
+# Archivos locales de la CLI de Supabase
+.temp
+.branches
+.env
