@@ -2,6 +2,7 @@
 import { useState, useEffect, useContext } from "react"; 
 import {
   addHistorial,
+  notificarPrestamo,
   subscribeToEquipos,
   subscribeToHistorial,
   updateEquipo,
@@ -9,7 +10,6 @@ import {
 import { useAuth } from "../context/useAuth";
 import { ThemeContext } from "../context/theme"; 
 import Sidebar from "../components/Sidebar";
-import emailjs from '@emailjs/browser';
 import Swal from 'sweetalert2'; 
 import { 
   PieChart, Pie, Cell, 
@@ -120,89 +120,12 @@ export default function Dashboard() {
   }, []);
 
 
-  // --- NUEVO: FUNCIÓN PARA REVISAR VENCIDOS AL ENTRAR AL DASHBOARD ---
-  useEffect(() => {
-    const verificarVencidos = async () => {
-      // Evitamos ejecutar si la lista aún está vacía
-      if (prestadosList.length === 0) return; 
-
-      const ahora = new Date();
-
-      // 👇 NUEVO: Define aquí la categoría (o categorías) que quieres excluir.
-      // Escríbelas en MAYÚSCULAS para evitar errores de tipeo.
-      const categoriasExcluidas = ["ADMINISTRATIVOS"];
-
-      for (const item of prestadosList) {
-        
-        // 👇 NUEVO: Validamos si la categoría del equipo está en la lista de excluidas
-        const categoriaEquipo = item.categoria ? item.categoria.toUpperCase() : "";
-        if (categoriasExcluidas.includes(categoriaEquipo)) {
-          continue; // Si está en la lista, saltamos este equipo y no enviamos correo
-        }
-
-        // La fecha puede venir como una cadena ISO o una fecha serializada.
-        if (item.estado?.toLowerCase() === "prestado" && item.fecha_prestamo && !item.alerta_enviada) {
-          
-          const fechaPrestamo = typeof item.fecha_prestamo.toDate === 'function' 
-            ? item.fecha_prestamo.toDate() 
-            : new Date(item.fecha_prestamo);
-          
-          const horasPasadas = (ahora - fechaPrestamo) / (1000 * 60 * 60);
-
-          if (horasPasadas >= 48) {
-            console.log(`El equipo ${item.nombre} excedió las 48 hrs. Enviando correo automático...`);
-            
-            try {
-              let matricula = "desconocido";
-              const match = (item.poseedor_actual || "").match(/\d+/);
-              if (item.matricula || item.alumno_matricula) matricula = item.matricula || item.alumno_matricula;
-              else if (match) matricula = match;
-
-              const correoAlumno = `${matricula}@cesba-queretaro.edu.mx`;
-
-              // Mandamos correo
-              await emailjs.send(
-                'service_mjwigqc', 'template_2igqgus', 
-                {
-                  correo_destino: correoAlumno,
-                  nombre_alumno: item.poseedor_actual || item.alumno_nombre || 'Alumno',
-                  nombre_equipo: item.nombre,
-                  id_equipo: item.id_qr || item.id
-                }, 
-                'ghx5YPipRyYK0oPBG'
-              );
-
-              // Actualizamos el equipo para marcar la alerta y cambiar estado a "No responde" si lo deseas
-              await updateEquipo(item.id, {
-                alerta_enviada: true,
-                estado: "No responde" // Lo marcamos como falta automáticamente
-              });
-
-              // Guardamos en historial
-              await addHistorial({
-                idEquipo: item.id,
-                nombreEquipo: item.nombre,
-                accion: "FALTA AUTOMÁTICA (48 Hrs)",
-                fecha: new Date(),
-                admin: "Sistema Automático", 
-                observaciones: `Correo enviado a: ${correoAlumno}`
-              });
-
-            } catch (error) {
-              console.error("Error enviando alerta automática:", error);
-            }
-          }
-        }
-      }
-    };
-
-    verificarVencidos();
-  }, [prestadosList]); // Revisa cada vez que cambia la lista de prestados
+  // Los préstamos vencidos (48 h) los revisa el servidor cada hora con pg_cron:
+  // ver supabase/functions/notificaciones-prestamos y supabase/cron/alertas-prestamos.sql.
 
   // 3. FUNCIÓN MANEJO DE FALTAS MANUALES
   const handleToggleFalta = async (item) => {
     const tieneFalta = item.estado?.toLowerCase() === "no responde";
-    const nuevoEstado = tieneFalta ? "Prestado" : "No responde";
     
     const swalConfig = tieneFalta 
       ? { title: '¿Retirar Falta?', text: `Se quitará la marca de moroso a "${item.nombre}" y volverá a estar Prestado.`, icon: 'info', confirmButtonColor: '#28a745' }
@@ -215,27 +138,20 @@ export default function Dashboard() {
     try {
       Swal.fire({ title: 'Procesando...', text: 'Actualizando estado y enviando notificaciones', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
 
-      await updateEquipo(item.id, { estado: nuevoEstado, alerta_enviada: !tieneFalta }); // Actualizamos bandera de alerta
-
       if (!tieneFalta) {
-        let matricula = "desconocido";
-        const match = (item.poseedor_actual || "").match(/\d+/);
-        if (item.matricula || item.alumno_matricula) matricula = item.matricula || item.alumno_matricula;
-        else if (match) matricula = match;
-
-        const correoAlumno = `${matricula}@cesba-queretaro.edu.mx`;
-
-        await addHistorial({ idEquipo: item.id, nombreEquipo: item.nombre, accion: "MARCA DE FALTA", fecha: new Date(), admin: userData?.nombre || "Admin", observaciones: `Correo enviado a: ${correoAlumno}` });
-        await emailjs.send('service_mjwigqc', 'template_2igqgus', { correo_destino: correoAlumno, nombre_alumno: item.poseedor_actual || item.alumno_nombre || 'Alumno', nombre_equipo: item.nombre, id_equipo: item.id_qr || item.id }, 'ghx5YPipRyYK0oPBG');
-
-        Swal.fire({ title: '¡Falta marcada!', text: `Correo enviado a ${correoAlumno}`, icon: 'success', timer: 3000, showConfirmButton: false });
+        // El servidor marca la falta, envía el correo y lo registra en el historial.
+        const { correo } = await notificarPrestamo("marcar-falta", item.id);
+        Swal.fire({ title: '¡Falta marcada!', text: `Correo enviado a ${correo}`, icon: 'success', timer: 3000, showConfirmButton: false });
       } else {
+        // alerta_enviada sigue en true: el aviso ya se envió y la revisión
+        // automática no debe volver a marcar este préstamo.
+        await updateEquipo(item.id, { estado: "Prestado", alerta_enviada: true });
         await addHistorial({ idEquipo: item.id, nombreEquipo: item.nombre, accion: "FALTA RETIRADA", fecha: new Date(), admin: userData?.nombre || "Admin" });
         Swal.fire({ title: '¡Falta retirada!', text: 'El equipo ha vuelto a Prestado.', icon: 'success', timer: 2500, showConfirmButton: false });
       }
     } catch (error) {
-      console.error("Error en handleToggleFalta:", error); // <-- Agregamos esta línea
-      Swal.fire('Error', 'Hubo un problema. Revisa la consola.', 'error');
+      console.error("Error en handleToggleFalta:", error);
+      Swal.fire('Error', error.message || 'No se pudo actualizar la falta.', 'error');
     }
   };
 
@@ -257,38 +173,14 @@ export default function Dashboard() {
     try {
       Swal.fire({ title: 'Enviando correo...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
 
-      let matricula = "desconocido";
-      const match = (item.poseedor_actual || "").match(/\d+/);
-      if (item.matricula || item.alumno_matricula) matricula = item.matricula || item.alumno_matricula;
-      else if (match) matricula = match;
-
-      const correoAlumno = `${matricula}@cesba-queretaro.edu.mx`;
-
-      await emailjs.send(
-        'service_mjwigqc', 'template_2igqgus', 
-        {
-          correo_destino: correoAlumno,
-          nombre_alumno: item.poseedor_actual || item.alumno_nombre || 'Alumno',
-          nombre_equipo: item.nombre,
-          id_equipo: item.id_qr || item.id
-        }, 
-        'ghx5YPipRyYK0oPBG'
-      );
-
-      await addHistorial({
-        idEquipo: item.id,
-        nombreEquipo: item.nombre,
-        accion: "REENVÍO DE CORREO",
-        fecha: new Date(),
-        admin: userData?.nombre || "Admin",
-        observaciones: `Reenvío manual a: ${correoAlumno}`
-      });
+      // El servidor envía el correo y registra el reenvío en el historial.
+      const { correo: correoAlumno } = await notificarPrestamo("reenviar-correo", item.id);
 
       Swal.fire({ title: '¡Correo Enviado!', text: `El recordatorio llegó a ${correoAlumno}`, icon: 'success', timer: 3000, showConfirmButton: false });
 
     } catch (error) {
-      console.error("Error en handleToggleFalta:", error);
-      Swal.fire('Error', 'No se pudo enviar el correo.', 'error');
+      console.error("Error al reenviar el correo:", error);
+      Swal.fire('Error', error.message || 'No se pudo enviar el correo.', 'error');
     }
   };
 

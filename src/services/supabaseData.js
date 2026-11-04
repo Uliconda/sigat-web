@@ -133,3 +133,17 @@ export async function updateProfile(id, changes) {
   throwIfError(error);
   if (!data) throw new Error("El perfil no existe o no tienes permiso para editarlo.");
 }
+
+// Llama a la Edge Function de notificaciones (los correos se envían en el servidor).
+// action: "marcar-falta" | "reenviar-correo" | "revisar-vencidos"
+export async function notificarPrestamo(action, equipoId) {
+  const { data, error } = await supabase.functions.invoke("notificaciones-prestamos", {
+    body: { action, equipoId },
+  });
+  if (error) {
+    // La función responde { error: "mensaje" }; se muestra ese mensaje en vez del genérico.
+    const detalle = await error.context?.json?.().catch(() => null);
+    throw new Error(detalle?.error || error.message);
+  }
+  return data;
+}

@@ -1,33 +1,18 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-function getCorsHeaders(origin = "") {
-  return {
-    "Access-Control-Allow-Origin": Deno.env.get("APP_ORIGIN") ?? origin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-  };
-}
-
-function jsonResponse(body: unknown, status = 200, origin = "") {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...getCorsHeaders(origin), "Content-Type": "application/json" },
-  });
-}
+import { allowedOrigins, getCorsHeaders, isOriginAllowed, jsonResponse } from "../_shared/cors.ts";
 
 Deno.serve(async (request) => {
   const origin = request.headers.get("Origin") ?? "";
-  const appOrigin = Deno.env.get("APP_ORIGIN");
-  if (!appOrigin) {
+  if (!allowedOrigins().length) {
     console.error("Falta configurar APP_ORIGIN.");
     return jsonResponse({ error: "La función no está configurada." }, 500, origin);
   }
-  if (origin && origin !== appOrigin) {
+  if (!isOriginAllowed(origin)) {
     return jsonResponse({ error: "Origen no permitido." }, 403, origin);
   }
 
   if (request.method === "OPTIONS") {
-    return new Response("ok", { headers: getCorsHeaders() });
+    return new Response("ok", { headers: getCorsHeaders(origin) });
   }
 
   if (request.method !== "POST") {

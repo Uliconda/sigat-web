@@ -1,0 +1,59 @@
+<!--
+  Plantilla del aviso de retraso para EmailJS (Email Templates > Content > Edit content > Code).
+  Variables que envía la función notificaciones-prestamos:
+    {{correo_destino}}  → va en "To Email" (Settings de la plantilla), no aquí
+    {{nombre_alumno}}   → nombre de quien tiene el equipo, p. ej. "Uliconda hdz (2314209)"
+    {{nombre_equipo}}   → p. ej. "Proyector Epson"
+    {{id_equipo}}       → p. ej. "EQ-001"
+  Asunto sugerido: Aviso de retraso en la devolución: {{nombre_equipo}}
+-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:24px 0;font-family:Arial,Helvetica,sans-serif;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+        <tr>
+          <td style="background:#FF6F00;padding:20px 28px;color:#ffffff;font-size:20px;font-weight:bold;">
+            SIGAT · Aviso de retraso
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px;color:#27272a;font-size:15px;line-height:1.6;">
+            <p style="margin:0 0 16px;">Estimado/a <strong>{{nombre_alumno}}</strong>,</p>
+            <p style="margin:0 0 20px;">
+              Por medio de este correo te notificamos que el sistema ha registrado un retraso en la
+              entrega del siguiente material que solicitaste:
+            </p>
+
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border-left:4px solid #FF6F00;border-radius:6px;margin:0 0 20px;">
+              <tr>
+                <td style="padding:14px 18px;font-size:15px;">
+                  <div style="margin-bottom:6px;"><span style="color:#71717a;">Equipo:</span> <strong>{{nombre_equipo}}</strong></div>
+                  <div><span style="color:#71717a;">ID / Código:</span> <strong>{{id_equipo}}</strong></div>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:0 0 16px;">
+              Te solicitamos amablemente que pases a devolverlo al área correspondiente a la brevedad
+              posible. Recuerda que la entrega puntual es indispensable para evitar sanciones y permitir
+              que otros compañeros puedan utilizar el material.
+            </p>
+            <p style="margin:0 0 24px;color:#71717a;font-size:13px;">
+              <strong>Nota:</strong> Si ya realizaste la devolución de este equipo hace unos momentos,
+              por favor haz caso omiso a este mensaje.
+            </p>
+            <p style="margin:0;">
+              Atentamente,<br />
+              <strong>Departamento de Sistemas - CESBA</strong>
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:14px 28px;background:#fafafa;color:#a1a1aa;font-size:12px;border-top:1px solid #e4e4e7;">
+            Mensaje automático del Sistema de Gestión de Inventario (SIGAT).
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
