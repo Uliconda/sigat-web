@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import type { User } from "@supabase/supabase-js";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { supabase } from "../config/supabase";
 import { getProfile } from "../services/supabaseData";
+import type { Perfil } from "../types";
 import { AuthContext } from "./authContext";
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [userData, setUserData] = useState(null);
+const comoError = (error: unknown): Error => (error instanceof Error ? error : new Error(String(error)));
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [userData, setUserData] = useState<Perfil | null>(null);
   const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState(null);
+  const [authError, setAuthError] = useState<Error | null>(null);
 
   const refreshProfile = useCallback(async () => {
     if (!user) return null;
@@ -18,7 +22,7 @@ export function AuthProvider({ children }) {
       setAuthError(profile ? null : new Error("La cuenta no tiene un perfil SIGAT."));
       return profile;
     } catch (error) {
-      setAuthError(error);
+      setAuthError(comoError(error));
       throw error;
     } finally {
       setLoading(false);
@@ -29,7 +33,7 @@ export function AuthProvider({ children }) {
     let active = true;
     let profileRequest = 0;
 
-    const applySession = (currentUser) => {
+    const applySession = (currentUser: User | null) => {
       setUser(currentUser);
       setUserData(null);
       setAuthError(null);
@@ -52,7 +56,7 @@ export function AuthProvider({ children }) {
         } catch (error) {
           if (!active || requestId !== profileRequest) return;
           console.error("Error al cargar el perfil de Supabase:", error);
-          setAuthError(error);
+          setAuthError(comoError(error));
         } finally {
           if (active && requestId === profileRequest) setLoading(false);
         }
@@ -62,7 +66,7 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession().then(({ data, error }) => {
       if (!active) return;
       if (error) {
-        setAuthError(error);
+        setAuthError(comoError(error));
         setLoading(false);
         return;
       }
@@ -70,7 +74,7 @@ export function AuthProvider({ children }) {
     }).catch((error) => {
       if (!active) return;
       console.error("Error al verificar la sesión de Supabase:", error);
-      setAuthError(error);
+      setAuthError(comoError(error));
       setLoading(false);
     });
 

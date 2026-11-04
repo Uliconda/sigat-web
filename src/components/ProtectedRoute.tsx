@@ -1,9 +1,10 @@
-// src/components/ProtectedRoute.jsx
+// src/components/ProtectedRoute.tsx
+import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/useAuth";
 import { PantallaEstado } from "./PantallaEstado";
 
-export function ProtectedRoute({ children }) {
+export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, userData, loading, authError, refreshProfile } = useAuth();
 
   // Espera a que Supabase termine de verificar la sesión.

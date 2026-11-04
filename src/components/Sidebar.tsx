@@ -1,9 +1,10 @@
-// src/components/Sidebar.jsx
+// src/components/Sidebar.tsx
 import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../config/supabase";
 import { subscribeToEquipos } from "../services/supabaseData";
 import logo from "../assets/logo-buho.webp";
+import type { Equipo } from "../types";
 import "./Sidebar.css";
 
 const MENU = [
@@ -16,12 +17,12 @@ const MENU = [
 const DIAS_MANTENIMIENTO = 90;
 
 // Cuenta los equipos sin revisión en más de 90 días.
-function contarUrgentes(equipos) {
+function contarUrgentes(equipos: Equipo[]): number {
   const limite = Date.now() - DIAS_MANTENIMIENTO * 24 * 60 * 60 * 1000;
   return equipos.filter((equipo) => {
     const valor = equipo.fecha_revision || equipo.lastCheck;
     if (!valor) return false;
-    const fecha = valor.toDate ? valor.toDate() : new Date(valor);
+    const fecha = new Date(valor);
     return fecha.getTime() < limite;
   }).length;
 }
@@ -50,7 +51,9 @@ export default function Sidebar() {
   // Escape cierra el menú y se bloquea el scroll del fondo mientras está abierto.
   useEffect(() => {
     if (!abierto) return undefined;
-    const onKey = (event) => event.key === "Escape" && setAbierto(false);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAbierto(false);
+    };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {

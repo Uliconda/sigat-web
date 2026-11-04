@@ -76,7 +76,12 @@ for (const [rol, id] of Object.entries(ids)) {
   await db.query(`insert into auth.users values ($1)`, [id]);
   await db.query(`insert into public.profiles (id, nombre, email, rol) values ($1, $2, $3, $4)`, [id, `Cuenta ${rol}`, `${rol}@sigat.mx`, rol]);
 }
-await db.exec(`alter table public.equipos disable trigger equipos_sync_carpetas`);
+// Simula una instalación anterior: sin carpetas automáticas ni estados fijos.
+await db.exec(`
+  alter table public.equipos disable trigger equipos_sync_carpetas;
+  alter table public.equipos disable trigger equipos_a_preparar_estado;
+  alter table public.equipos drop constraint equipos_estado_valido;
+`);
 for (const [id, data] of [
   ["EQ-001", { nombre: "Laptop Dell", categoria: "Cómputo", subcategoria: "Laptops", subSubcategoria: "Dell", estado: "PRESTADO" }],
   ["EQ-002", { nombre: "Laptop HP", categoria: "CÓMPUTO", subcategoria: "laptops ", subSubcategoria: "HP", estado: "DISPONIBLE" }],
@@ -85,7 +90,10 @@ for (const [id, data] of [
 ]) {
   await db.query(`insert into public.equipos (id, data) values ($1, $2)`, [id, data]);
 }
-await db.exec(`alter table public.equipos enable trigger equipos_sync_carpetas`);
+await db.exec(`
+  alter table public.equipos enable trigger equipos_sync_carpetas;
+  alter table public.equipos enable trigger equipos_a_preparar_estado;
+`);
 
 console.log("2. Migración sobre datos existentes (volver a ejecutar el esquema)");
 await db.exec(schema);
@@ -232,6 +240,30 @@ await db.exec(`reset role`);
 await db.exec(`set role service_role`);
 check("la clave de servicio sí puede ejecutarlas", Array.isArray(await rows(`select * from public.reclamar_prestamos_vencidos(48)`)));
 await db.exec(`reset role`);
+
+console.log("15. Estados con valores fijos");
+await as("");
+const estadoDe = async (id) => (await rows(`select data->>'estado' as e from public.equipos where id = $1`, [id]))[0]?.e;
+check("la restricción quedó activa tras migrar datos antiguos",
+  (await rows(`select 1 from pg_constraint where conname = 'equipos_estado_valido' and convalidated`)).length === 1);
+await db.query(`insert into public.equipos (id, data) values ('ES-1', '{"nombre":"Sin estado"}')`);
+check("un equipo nuevo sin estado queda Disponible", (await estadoDe("ES-1")) === "Disponible");
+await db.query(`insert into public.equipos (id, data) values ('ES-2', '{"nombre":"Mayúsculas","estado":" PRESTADO "}')`);
+check("normaliza variantes al guardar", (await estadoDe("ES-2")) === "Prestado");
+await db.query(`update public.equipos set data = data || '{"estado":"fuera de servicio"}' where id = 'ES-2'`);
+check("también al actualizar", (await estadoDe("ES-2")) === "Fuera de Servicio");
+await expectError("rechaza un estado inventado",
+  `insert into public.equipos (id, data) values ('ES-3', '{"estado":"Perdido"}')`, [], /equipos_estado_valido/);
+await expectError("rechaza borrar el estado de un equipo existente",
+  `update public.equipos set data = data - 'estado' where id = 'ES-1'`, [], /equipos_estado_valido/);
+await expectError("rechaza un estado que no es texto",
+  `update public.equipos set data = data || '{"estado":5}' where id = 'ES-1'`, [], /equipos_estado_valido/);
+await as("admin");
+await expectError("update_equipo también respeta la restricción",
+  `select public.update_equipo('ES-1', '{"estado":"Robado"}')`, [], /equipos_estado_valido/);
+await db.query(`select public.update_equipo('ES-1', '{"estado":"prestado"}')`);
+check("update_equipo guarda el estado normalizado", (await estadoDe("ES-1")) === "Prestado");
+await as("");
 
 console.log(`\n${passed} correctas, ${failed} fallidas`);
 process.exit(failed ? 1 : 0);

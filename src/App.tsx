@@ -1,5 +1,5 @@
-// src/App.jsx
-import { lazy, Suspense } from "react";
+// src/App.tsx
+import { lazy, Suspense, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { PantallaEstado } from "./components/PantallaEstado";
@@ -12,7 +12,7 @@ const Users = lazy(() => import("./pages/Users"));
 const QrGenerator = lazy(() => import("./pages/QrGenerator"));
 const Maintenance = lazy(() => import("./pages/Maintenance"));
 
-const privada = (pagina) => <ProtectedRoute>{pagina}</ProtectedRoute>;
+const privada = (pagina: ReactNode) => <ProtectedRoute>{pagina}</ProtectedRoute>;
 
 function App() {
   return (

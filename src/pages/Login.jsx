@@ -6,6 +6,7 @@ import { getProfile } from "../services/supabaseData";
 import { useAuth } from "../context/useAuth";
 import logo from "../assets/logo-buho.webp";
 import { errorDeFuncion, mensajeDeError } from "../utils/errores";
+import "./Login.css";
 
 export default function Login() {
 const [email, setEmail] = useState("");
@@ -135,11 +136,11 @@ const handleNewPassword = async (e) => {
 };
 
 return (
-<div style={styles.container}>
-    <div style={styles.card}>
-    <img src={logo} alt="" width="88" height="92" style={{ display: "block", margin: "0 auto 12px", height: "auto" }} />
-    <h2 style={styles.title}>SIGAT Admin</h2>
-    <p style={styles.subtitle}>
+<div className="login">
+    <div className="login__tarjeta">
+    <img src={logo} alt="" width="88" height="92" className="login__logo" />
+    <h2 className="login__titulo">SIGAT Admin</h2>
+    <p className="login__subtitulo">
         {mustChangePassword || recovery
             ? "Establecer nueva contraseña"
             : resetMode
@@ -148,55 +149,58 @@ return (
     </p>
 
     {mustChangePassword && (
-        <div role="status" style={styles.successBox}>
+        <div role="status" className="login__aviso login__aviso--exito">
             Esta contraseña temporal debe cambiarse antes de continuar. Usa una contraseña nueva de al menos 12 caracteres.
         </div>
     )}
 
-    {error && <div style={styles.errorBox}>{error}</div>}
+    {error && <div role="alert" className="login__aviso login__aviso--error">{error}</div>}
 
     {resetSent && (
-        <div role="status" style={styles.successBox}>
+        <div role="status" className="login__aviso login__aviso--exito">
             Si el correo está registrado, Supabase aceptó la solicitud. Revisa la bandeja de entrada y spam.
             En el modo de prueba de Resend, el destinatario debe ser el correo verificado en Resend.
         </div>
     )}
 
     {recovery || mustChangePassword ? (
-    <form onSubmit={handleNewPassword} style={styles.form}>
-        <div style={styles.inputGroup}>
-        <label>Nueva contraseña</label>
+    <form onSubmit={handleNewPassword} className="login__formulario">
+        <div className="login__campo">
+        <label htmlFor="login-campo-1">Nueva contraseña</label>
         <input
+            id="login-campo-1"
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             minLength={12}
             required
-            style={styles.input}
+            className="login__input"
             autoComplete="new-password"
         />
         </div>
-        <div style={styles.inputGroup}>
-        <label>Confirmar nueva contraseña</label>
+        <div className="login__campo">
+        <label htmlFor="login-campo-2">Confirmar nueva contraseña</label>
         <input
+            id="login-campo-2"
             type="password"
             value={confirmNewPassword}
             onChange={(e) => setConfirmNewPassword(e.target.value)}
             minLength={12}
             required
-            style={styles.input}
+            className="login__input"
             autoComplete="new-password"
         />
         </div>
-        <button type="submit" disabled={loading} style={styles.button}>
+        <button type="submit" disabled={loading} className="login__boton">
         {loading ? "Guardando..." : "Guardar contraseña"}
         </button>
     </form>
     ) : resetMode ? (
-    <form onSubmit={handleResetPassword} style={styles.form}>
-        <div style={styles.inputGroup}>
-        <label>Correo Electrónico</label>
+    <form onSubmit={handleResetPassword} className="login__formulario">
+        <div className="login__campo">
+        <label htmlFor="login-campo-3">Correo Electrónico</label>
         <input
+            id="login-campo-3"
             type="email"
             value={email}
             onChange={(e) => {
@@ -205,11 +209,11 @@ return (
                 setError("");
             }}
             required
-            style={styles.input}
+            className="login__input"
             autoComplete="email"
         />
         </div>
-        <button type="submit" disabled={loading} style={styles.button}>
+        <button type="submit" disabled={loading} className="login__boton">
         {loading ? "Solicitando..." : resetSent ? "Reenviar enlace" : "Enviar enlace"}
         </button>
         <button
@@ -219,38 +223,40 @@ return (
                 setResetSent(false);
                 setError("");
             }}
-            style={styles.resetButton}
+            className="login__enlace"
         >
             Volver al inicio de sesión
         </button>
     </form>
     ) : (
-    <form onSubmit={handleLogin} style={styles.form}>
-        <div style={styles.inputGroup}>
-        <label>Correo Electrónico</label>
+    <form onSubmit={handleLogin} className="login__formulario">
+        <div className="login__campo">
+        <label htmlFor="login-campo-4">Correo Electrónico</label>
         <input
+            id="login-campo-4"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            style={styles.input}
+            className="login__input"
             placeholder="admin@sigat.com"
         />
         </div>
 
-        <div style={styles.inputGroup}>
-        <label>Contraseña</label>
+        <div className="login__campo">
+        <label htmlFor="login-campo-5">Contraseña</label>
         <input
+            id="login-campo-5"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            style={styles.input}
+            className="login__input"
             placeholder="********"
         />
         </div>
 
-        <button type="submit" disabled={loading} style={styles.button}>
+        <button type="submit" disabled={loading} className="login__boton">
         {loading ? "Verificando..." : "Ingresar"}
         </button>
     </form>
@@ -264,7 +270,7 @@ return (
                 setError("");
             }}
             disabled={loading || !email}
-            style={styles.resetButton}
+            className="login__enlace"
         >
             Restablecer contraseña
         </button>
@@ -273,90 +279,3 @@ return (
 </div>
 );
 }
-
-// Estilos básicos en línea
-const styles = {
-container: {
-display: "flex",
-justifyContent: "center",
-alignItems: "center",
-minHeight: "100vh",
-padding: "16px",
-backgroundColor: "var(--bg-color)",
-},
-card: {
-backgroundColor: "var(--card-bg)",
-color: "var(--text-color)",
-padding: "clamp(24px, 6vw, 40px)",
-borderRadius: "16px",
-border: "1px solid var(--border-color)",
-boxShadow: "var(--shadow-md)",
-width: "100%",
-maxWidth: "400px",
-},
-title: {
-textAlign: "center",
-marginBottom: "5px",
-color: "var(--text-color)",
-},
-subtitle: {
-textAlign: "center",
-marginBottom: "20px",
-color: "var(--text-muted)",
-},
-form: {
-display: "flex",
-flexDirection: "column",
-gap: "15px",
-},
-inputGroup: {
-display: "flex",
-flexDirection: "column",
-gap: "5px",
-},
-input: {
-padding: "12px",
-borderRadius: "8px",
-border: "1px solid var(--border-color)",
-backgroundColor: "var(--input-bg)",
-color: "var(--text-color)",
-fontSize: "16px", // 16px evita el zoom automático de iPhone al enfocar
-},
-button: {
-padding: "12px",
-backgroundColor: "var(--primary)",
-color: "white",
-border: "none",
-borderRadius: "8px",
-fontSize: "16px",
-cursor: "pointer",
-fontWeight: "bold",
-marginTop: "10px",
-},
-resetButton: {
-background: "none",
-border: "none",
-color: "var(--primary)",
-cursor: "pointer",
-marginTop: "12px",
-padding: "8px",
-},
-errorBox: {
-backgroundColor: "rgba(198, 40, 40, 0.12)",
-color: "var(--danger)",
-padding: "10px",
-borderRadius: "8px",
-marginBottom: "15px",
-textAlign: "center",
-fontSize: "14px",
-},
-successBox: {
-backgroundColor: "rgba(46, 125, 50, 0.12)",
-color: "var(--success)",
-padding: "10px",
-borderRadius: "8px",
-marginBottom: "15px",
-textAlign: "center",
-fontSize: "14px",
-}
-};

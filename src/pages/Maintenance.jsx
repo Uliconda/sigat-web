@@ -1,10 +1,11 @@
 // src/pages/Maintenance.jsx
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Sidebar from "../components/Sidebar";
 import Swal from "sweetalert2";
 import { addHistorial, getEquipos, updateEquipo } from "../services/supabaseData";
 import { useAuth } from "../context/useAuth";
 import { mensajeDeError } from "../utils/errores";
+import "./Maintenance.css";
 
 const Maintenance = () => {
 const [maintenanceAlerts, setMaintenanceAlerts] = useState([]);
@@ -37,7 +38,7 @@ return new Intl.DateTimeFormat("es-MX", {
 
 const getAlertStatus = (value) => {
 if (!value) {
-    return { status: "Pendiente", color: "#ffcc00", bgColor: "rgba(255, 204, 0, 0.1)" };
+    return { status: "Pendiente", tono: "aviso" };
 }
 
 const date = new Date(value);
@@ -45,12 +46,12 @@ const diffMs = currentTime - date.getTime();
 const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
 if (diffDays > 360) {
-    return { status: "Urgente", color: "#ff4444", bgColor: "rgba(255, 68, 68, 0.1)" };
+    return { status: "Urgente", tono: "peligro" };
 }
 if (diffDays > 90) {
-    return { status: "Ir revisando estado del equipo", color: "#ffcc00", bgColor: "rgba(255, 204, 0, 0.1)" };
+    return { status: "Ir revisando estado del equipo", tono: "aviso" };
 }
-return { status: "En tiempo", color: "#4caf50", bgColor: "rgba(76, 175, 80, 0.1)" };
+return { status: "En tiempo", tono: "exito" };
 
 };
 
@@ -118,52 +119,51 @@ try {
 return (
 <div className="app-layout">
     <Sidebar />
-    
+
     <main className="app-main">
-    <header style={styles.header}>
+    <header className="pagina-encabezado">
         <div>
-        <h1 style={styles.title}>Mantenimiento Preventivo (RCM)</h1>
-        <p style={styles.subtitle}>Gestión de alertas para evitar mantenimientos correctivos y alargar la vida útil.</p>
+        <h1 className="pagina-titulo">Mantenimiento Preventivo (RCM)</h1>
+        <p className="pagina-subtitulo">Gestión de alertas para evitar mantenimientos correctivos y alargar la vida útil.</p>
         </div>
     </header>
 
-    <div style={styles.tableCard}>
-        <table style={styles.table}>
+    <div className="tabla-tarjeta">
+        <table className="tabla mantenimiento-tabla">
         <thead>
-            <tr style={styles.theadRow}>
-            <th style={styles.th}>ID</th>
-            <th style={styles.th}>EQUIPO</th>
-            <th style={styles.th}>ÚLTIMA REVISIÓN</th>
-            <th style={styles.th}>ESTADO DE ALERTA</th>
-            <th style={styles.th}>OBSERVACIÓN</th>
-            <th style={{ ...styles.th, textAlign: "center" }}>ACCIONES</th>
+            <tr>
+            <th>ID</th>
+            <th>EQUIPO</th>
+            <th>ÚLTIMA REVISIÓN</th>
+            <th>ESTADO DE ALERTA</th>
+            <th>OBSERVACIÓN</th>
+            <th className="centrado">ACCIONES</th>
             </tr>
         </thead>
         <tbody>
-            {maintenanceAlerts.map((item, index) => {
-            const { status, color, bgColor } = getAlertStatus(item.fecha_revision || item.lastCheck);
-            
+            {maintenanceAlerts.map((item) => {
+            const { status, tono } = getAlertStatus(item.fecha_revision || item.lastCheck);
+
             return (
-                <tr key={index} style={styles.tr}>
-                <td style={{ ...styles.td, fontWeight: "bold" }}>{item.id}</td>
-                <td style={styles.td}>{item.nombre || item.name}</td>
-                <td style={styles.td}>{formatDate(item.fecha_revision || item.lastCheck)}</td>
-                <td style={styles.td}>
-                    <span style={{ ...styles.statusBadge, backgroundColor: bgColor, color: color, border: `1px solid ${color}40` }}>
-                    {status}
-                    </span>
+                <tr key={item.id}>
+                <td className="negrita">{item.id}</td>
+                <td>{item.nombre || item.name}</td>
+                <td>{formatDate(item.fecha_revision || item.lastCheck)}</td>
+                <td>
+                    <span className={`etiqueta etiqueta--${tono}`}>{status}</span>
                 </td>
-                <td style={{ ...styles.td, color: "var(--text-color)", opacity: 0.8, maxWidth: "200px" }}>
+                <td className="mantenimiento-observacion">
                     {item.observacion_revision ? (
-                        item.observacion_revision.length > 40 
-                        ? `${item.observacion_revision.substring(0, 40)}...` 
+                        item.observacion_revision.length > 40
+                        ? `${item.observacion_revision.substring(0, 40)}...`
                         : item.observacion_revision
                     ) : "—"}
                 </td>
-                <td style={{ ...styles.td, textAlign: "center" }}>
+                <td className="centrado">
                     <button
+                    type="button"
                     onClick={() => handleSchedule(item)}
-                    style={styles.btnAction}
+                    className="btn-accion"
                     title="Registrar nuevo mantenimiento"
                     >
                     🛠️ Realizar Revisión
@@ -176,32 +176,12 @@ return (
         </table>
 
         {maintenanceAlerts.length === 0 && (
-        <div style={styles.noResults}>No hay equipos registrados para revisar.</div>
+        <div className="tabla-vacia">No hay equipos registrados para revisar.</div>
         )}
     </div>
     </main>
 </div>
 );
-};
-
-// ==========================================
-// ESTILOS ADAPTADOS A VARIABLES GLOBALES
-// ==========================================
-const styles = {
-header: { marginBottom: "30px" },
-title: { margin: 0, fontSize: "clamp(22px, 5vw, 28px)", color: "var(--text-color)", transition: "0.3s" },
-subtitle: { margin: "5px 0 0 0", color: "var(--text-color)", opacity: 0.7, transition: "0.3s" },
-
-tableCard: { backgroundColor: "var(--card-bg)", borderRadius: "15px", border: "1px solid var(--border-color)", overflowX: "auto", WebkitOverflowScrolling: "touch", boxShadow: "0 4px 6px rgba(0,0,0,0.02)", transition: "0.3s" },
-table: { width: "100%", minWidth: "640px", borderCollapse: "collapse", textAlign: "left" },
-theadRow: { backgroundColor: "var(--bg-color)", borderBottom: "2px solid var(--border-color)", transition: "0.3s" },
-th: { padding: "14px 16px", fontSize: "13px", color: "var(--text-color)", opacity: 0.7, fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" },
-tr: { borderBottom: "1px solid var(--border-color)", transition: "0.2s" },
-td: { padding: "14px 16px", color: "var(--text-color)", fontSize: "14px" },
-
-statusBadge: { padding: "6px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "700", textTransform: "uppercase", display: "inline-block" },
-btnAction: { backgroundColor: "#ff6600", color: "white", border: "none", padding: "10px 15px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "bold", transition: "0.3s" },
-noResults: { padding: "40px", textAlign: "center", color: "var(--text-color)", opacity: 0.6 },
 };
 
 export default Maintenance;

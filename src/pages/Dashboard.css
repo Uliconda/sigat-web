@@ -1,0 +1,182 @@
+/* ===== Encabezado ===== */
+.dashboard-encabezado {
+  align-items: center;
+  gap: 12px;
+}
+
+.dashboard-encabezado__extras {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.dashboard-fecha {
+  padding: 8px 15px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-color);
+}
+
+.dashboard-tema {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+
+.dashboard-tema:hover {
+  background: var(--hover-bg);
+}
+
+/* ===== Tarjetas de métricas ===== */
+.dashboard-metricas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.dashboard-metrica {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+}
+
+.dashboard-metrica__icono {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 45px;
+  height: 45px;
+  border-radius: 10px;
+  font-size: 20px;
+}
+
+.dashboard-metrica__icono--total { background: #e3f2fd; }
+.dashboard-metrica__icono--disponibles { background: #e8f5e9; }
+.dashboard-metrica__icono--prestados { background: #fff3e0; }
+.dashboard-metrica__icono--faltas { background: #fce4ec; }
+
+/* En modo oscuro los fondos pastel se atenúan para no deslumbrar. */
+html.dark .dashboard-metrica__icono {
+  filter: brightness(0.75) saturate(0.8);
+}
+
+.dashboard-metrica__etiqueta {
+  font-size: 12px;
+  opacity: 0.6;
+  color: var(--text-color);
+}
+
+.dashboard-metrica__valor {
+  font-size: 24px;
+  color: var(--text-color);
+}
+
+/* ===== Gráficas ===== */
+.dashboard-seccion {
+  margin: 20px 0 15px;
+  font-size: 16px;
+  color: var(--text-color);
+}
+
+.dashboard-graficas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.dashboard-grafica {
+  flex: 1;
+  min-width: min(100%, 340px);
+}
+
+.dashboard-grafica__titulo {
+  margin-bottom: 15px;
+  font-size: 16px;
+  color: var(--text-color);
+}
+
+.dashboard-grafica__titulo small {
+  font-weight: 400;
+  opacity: 0.6;
+}
+
+.dashboard-grafica__lienzo {
+  height: 250px;
+}
+
+/* ===== Tabla de equipos en posesión ===== */
+.dashboard-tabla {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.dashboard-tabla thead tr {
+  border-bottom: 2px solid var(--border-color);
+  text-align: left;
+}
+
+.dashboard-tabla th {
+  padding: 12px;
+  font-size: 12px;
+  color: var(--text-color);
+  opacity: 0.6;
+}
+
+.dashboard-tabla tbody tr {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.dashboard-tabla td {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--text-color);
+  white-space: nowrap;
+}
+
+.dashboard-estado {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: bold;
+  background: #fff3e0;
+  color: #ef6c00;
+}
+
+.dashboard-estado--falta {
+  background: #fce4ec;
+  color: #ad1457;
+}
+
+.dashboard-acciones {
+  display: flex;
+  gap: 10px;
+}
+
+.dashboard-accion {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 11px;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.dashboard-accion:hover {
+  filter: brightness(0.9);
+}
+
+.dashboard-accion--marcar { background: #ad1457; }
+.dashboard-accion--quitar { background: #616161; }
+.dashboard-accion--reenviar { background: #1976d2; }

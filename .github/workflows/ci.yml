@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   verificar:
-    name: Lint, build, pruebas y esquema de base de datos
+    name: Lint, tipos, build, pruebas y esquema de base de datos
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -20,7 +20,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Instalar dependencias
@@ -28,6 +28,9 @@ jobs:
 
       - name: ESLint
         run: npm run lint
+
+      - name: Tipos (TypeScript)
+        run: npm run typecheck
 
       - name: Compilar
         run: npm run build

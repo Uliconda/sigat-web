@@ -183,19 +183,3 @@ textarea {
     transition-duration: 0.01ms !important;
   }
 }
-
-/* ==========================================
-   6. AJUSTES POR PÁGINA
-   ========================================== */
-.usuarios-main {
-  display: flex;
-  gap: 30px;
-  align-items: flex-start;
-}
-
-@media (max-width: 1100px) {
-  .usuarios-main {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
