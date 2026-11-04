@@ -647,7 +647,7 @@ export default function Inventory() {
                   </td>
 
                   <td style={{ ...styles.td, textAlign: "center", display: "flex", gap: "8px", justifyContent: "center" }}>
-                    {item.estado !== "Fuera de Servicio" ? (
+                    {item.estado?.toLowerCase() !== "fuera de servicio" ? (
                       <>
                         <button onClick={() => handleToggleStatus(item)} style={styles.btnAction} title="Cambiar estado (Prestar/Devolver)">🔄 Estado</button>
                         <button onClick={() => handleDiscardEquipment(item)} style={{...styles.btnAction, backgroundColor: "#fff0f0", color: "#d32f2f", borderColor: "#ffcdd2"}} title="Marcar como descompuesto o fuera de servicio">🚫 Baja</button>

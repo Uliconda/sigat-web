@@ -130,7 +130,7 @@ export default function Dashboard() {
 
       // 👇 NUEVO: Define aquí la categoría (o categorías) que quieres excluir.
       // Escríbelas en MAYÚSCULAS para evitar errores de tipeo.
-      const categoriasExcluidas = ["ADMINISTRATIVO"];
+      const categoriasExcluidas = ["ADMINISTRATIVOS"];
 
       for (const item of prestadosList) {
         
