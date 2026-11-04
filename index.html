@@ -3,10 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="SIGAT · Sistema de gestión de inventario y préstamo de equipos" />
     <meta name="theme-color" content="#FF6F00" />
     <title>SIGAT · Panel de administración</title>
+    <script>
+      // Aplica el tema antes de que cargue React para evitar un destello blanco.
+      (function () {
+        var tema = null;
+        try { tema = localStorage.getItem("appTheme"); } catch (e) {}
+        if (tema !== "dark" && tema !== "light") {
+          tema = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        document.documentElement.classList.add(tema);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

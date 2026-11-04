@@ -1,41 +1,59 @@
 // src/components/ProtectedRoute.jsx
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/useAuth";
+import { PantallaEstado } from "./PantallaEstado";
 
 export function ProtectedRoute({ children }) {
-const { user, userData, loading, authError } = useAuth();
+  const { user, userData, loading, authError, refreshProfile } = useAuth();
 
   // Espera a que Supabase termine de verificar la sesión.
-if (loading) {
-    return (
-    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '50px' }}>
-        <h2>Cargando sistema...</h2>
-    </div>
-    );
-}
+  if (loading) {
+    return <PantallaEstado tipo="cargando" titulo="Cargando sistema…" />;
+  }
 
-  // 2. Si NO hay usuario logueado, lo pateamos directo a la pantalla de Login ("/")
-if (!user) {
+  // Sin sesión: de vuelta al inicio de sesión.
+  if (!user) {
     return <Navigate to="/" replace />;
-}
+  }
 
-if (authError) {
-  return <div role="alert">No se pudo cargar tu perfil. Revisa la conexión con Supabase e inténtalo de nuevo.</div>;
-}
+  if (authError && authError.message !== "La cuenta no tiene un perfil SIGAT.") {
+    return (
+      <PantallaEstado
+        tipo="error"
+        titulo="No se pudo cargar tu perfil"
+        mensaje="Revisa tu conexión a internet e inténtalo de nuevo."
+        onReintentar={() => refreshProfile().catch(() => {})}
+        mostrarCerrarSesion
+      />
+    );
+  }
 
-if (!userData) {
-  return <div role="alert">La cuenta no tiene un perfil SIGAT. Contacta al administrador.</div>;
-}
+  if (!userData) {
+    return (
+      <PantallaEstado
+        tipo="denegado"
+        titulo="Cuenta sin perfil SIGAT"
+        mensaje="Tu cuenta existe, pero no tiene un perfil en SIGAT. Contacta al administrador."
+        mostrarCerrarSesion
+      />
+    );
+  }
 
-if (userData.must_change_password) {
-  return <Navigate to="/?change-password=required" replace />;
-}
+  if (userData.must_change_password) {
+    return <Navigate to="/?change-password=required" replace />;
+  }
 
-  // 3. Si SÍ está logueado, pero su rol NO es "admin", también le negamos el acceso
-if (userData.rol !== "admin" && userData.rol !== "superadmin") {
-  return <div>Acceso Denegado. Tu cuenta no tiene permisos de administrador para ver este panel.</div>;
-}
+  // El panel web es solo para administradores.
+  if (userData.rol !== "admin" && userData.rol !== "superadmin") {
+    return (
+      <PantallaEstado
+        tipo="denegado"
+        titulo="Acceso solo para administradores"
+        mensaje="Tu cuenta no tiene permisos para el panel web. Usa la app móvil SIGAT para registrar préstamos y devoluciones."
+        mostrarCerrarSesion
+      />
+    );
+  }
 
-  // 4. Si pasó todas las pruebas (está logueado y es admin), le mostramos la pantalla que pidió
-return children;
+  return children;
 }

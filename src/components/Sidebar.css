@@ -1,0 +1,235 @@
+/* ===== Menú lateral (escritorio) ===== */
+.sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 200;
+  width: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg);
+  border-right: 1px solid var(--border-color);
+  transition: transform 0.25s ease, background-color 0.3s ease;
+}
+
+.sidebar__logo {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-5) var(--space-5);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar__logo img {
+  width: 120px;
+  height: auto;
+}
+
+.sidebar__logo h2 {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.sidebar__logo h2 span {
+  color: var(--primary);
+}
+
+.sidebar__cerrar {
+  display: none;
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.sidebar__cerrar:hover {
+  background: var(--hover-bg);
+}
+
+.sidebar__nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4) 0;
+}
+
+.sidebar__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 14px var(--space-5);
+  color: var(--text-color);
+  text-decoration: none;
+  font-weight: 500;
+  border-right: 4px solid transparent;
+  transition: background-color 0.15s ease;
+}
+
+.sidebar__item:hover {
+  background: var(--hover-bg);
+}
+
+.sidebar__item--activo {
+  background: var(--primary-soft);
+  border-right-color: var(--primary);
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.sidebar__item-icono {
+  font-size: 20px;
+}
+
+.sidebar__item-texto {
+  flex: 1;
+}
+
+.sidebar__badge {
+  min-width: 24px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.sidebar__salir {
+  margin: var(--space-5);
+  padding: var(--space-3);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sidebar__salir:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* ===== Barra superior y fondo (solo celular) ===== */
+.topbar,
+.sidebar-fondo {
+  display: none;
+}
+
+/* ===== Aviso de mantenimiento urgente ===== */
+.aviso-urgente {
+  position: fixed;
+  right: var(--space-5);
+  bottom: var(--space-5);
+  z-index: 150;
+  max-width: calc(100vw - 2 * var(--space-4));
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--danger);
+  color: #fff;
+  font-size: 14px;
+  text-align: left;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+
+/* ===== Celular y tablet ===== */
+@media (max-width: 900px) {
+  .topbar {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 100;
+    height: var(--topbar-height);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 0 var(--space-3);
+    padding-top: env(safe-area-inset-top);
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .topbar__menu {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    font-size: 22px;
+    cursor: pointer;
+  }
+
+  .topbar__menu:hover {
+    background: var(--hover-bg);
+  }
+
+  .topbar__punto {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--danger);
+    border: 2px solid var(--card-bg);
+  }
+
+  .topbar__titulo {
+    flex: 1;
+    font-size: 17px;
+    font-weight: 700;
+  }
+
+  .topbar__logo {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+  }
+
+  .sidebar {
+    width: min(280px, 85vw);
+    transform: translateX(-100%);
+    box-shadow: var(--shadow-md);
+  }
+
+  .sidebar--abierto {
+    transform: translateX(0);
+  }
+
+  .sidebar__cerrar {
+    display: block;
+  }
+
+  .sidebar-fondo {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 190;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+
+  .sidebar-fondo--visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .aviso-urgente {
+    right: var(--space-4);
+    bottom: var(--space-4);
+    left: var(--space-4);
+    text-align: center;
+  }
+}
