@@ -1,4 +1,4 @@
-// src/pages/Inventory.jsx
+// src/pages/Inventory.tsx
 import { useState, useEffect } from "react";
 import {
   addHistorial,
@@ -16,10 +16,11 @@ import { escapeHtml } from "../utils/html";
 import Swal from 'sweetalert2';
 import { mensajeDeError } from "../utils/errores";
 import { ESTADOS, esEstado } from "../constants/estados";
+import type { Equipo } from "../types";
 import "./Inventory.css";
 
 export default function Inventory() {
-  const [equipos, setEquipos] = useState([]);
+  const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
 
   const [reportType, setReportType] = useState("all"); 
@@ -51,7 +52,7 @@ export default function Inventory() {
   // ==========================================
   // 2. FUNCIÓN PARA CAMBIAR ESTADO NORMAL
   // ==========================================
-  const handleToggleStatus = async (equipo) => {
+  const handleToggleStatus = async (equipo: Equipo) => {
     const esDisponible = esEstado(equipo.estado, ESTADOS.DISPONIBLE);
     const nuevoEstado = esDisponible ? ESTADOS.PRESTADO : ESTADOS.DISPONIBLE;
 
@@ -93,7 +94,7 @@ export default function Inventory() {
   // ==========================================
   // 3. FUNCIÓN PARA DAR DE BAJA (Fuera de Servicio)
   // ==========================================
-  const handleDiscardEquipment = async (equipo) => {
+  const handleDiscardEquipment = async (equipo: Equipo) => {
     const { value: motivo, isConfirmed } = await Swal.fire({
       title: 'Dar de Baja Equipo',
       text: `¿Por qué vas a dar de baja el equipo "${equipo.nombre}"?`,
@@ -137,7 +138,7 @@ export default function Inventory() {
   // ==========================================
   // 4. FUNCIÓN PARA REACTIVAR EQUIPO (Reparado)
   // ==========================================
-  const handleRestoreEquipment = async (equipo) => {
+  const handleRestoreEquipment = async (equipo: Equipo) => {
     const { value: motivo, isConfirmed } = await Swal.fire({
       title: 'Reactivar Equipo',
       text: `¿Por qué se vuelve a activar el equipo "${equipo.nombre}"?`,
@@ -181,7 +182,7 @@ export default function Inventory() {
   // ==========================================
   // 5. FUNCIÓN PARA GENERAR QR, DESCARGAR E IMPRIMIR
   // ==========================================
-  const handleGenerateQR = async (equipo) => {
+  const handleGenerateQR = async (equipo: Equipo) => {
     // El QR se genera en el navegador: no depende de servicios externos.
     let qrUrl;
     try {
@@ -271,7 +272,7 @@ export default function Inventory() {
       // Escapamos las comas reemplazándolas por espacios para no romper el CSV
       const id = item.id || "";
       const nombre = (item.nombre || "---").replace(/,/g, "");
-      const serie = (item.numeroSerie || "---").replace(/,/g, "");
+      const serie = (item.no_serie || "---").replace(/,/g, "");
       
       // Aquí defines qué es lo que lee tu QR
       const datosQR = id; 
@@ -416,7 +417,8 @@ export default function Inventory() {
   // 7. FUNCIÓN PARA EXPORTAR A PDF (CON SELECTOR AGRUPADO ORDENADO)
   // ==========================================
   const exportToPDF = async () => {
-    const inputOptions = {
+    // Grupo → { valor: texto } para el selector de SweetAlert.
+    const inputOptions: Record<string, Record<string, string>> = {
       "General": {
         "Todo": "🌟 Todo el inventario (Completo)"
       }
@@ -548,14 +550,14 @@ export default function Inventory() {
       return [
         item.id, 
         item.nombre, 
-        item.no_serie || "---", // 👈 Asegúrate de que el nombre de esta propiedad ("numeroSerie") coincida con el de tu base de datos/estado
+        item.no_serie || "---",
         item.categoria || "---", 
         item.subcategoria || "---", 
         item.subSubcategoria || "---", 
-        item.estado, 
+        item.estado ?? "---",
         item.usuarioActual || "---",
-        poseedor 
-      ];
+        poseedor,
+      ].map((valor) => String(valor ?? "---"));
     });
 
     autoTable(doc, {
@@ -687,7 +689,7 @@ export default function Inventory() {
 }
 
 // Clase CSS según el estado del equipo (los colores están en Inventory.css).
-function claseEstado(estado) {
+function claseEstado(estado?: string): string {
   if (esEstado(estado, ESTADOS.DISPONIBLE)) return "disponible";
   if (esEstado(estado, ESTADOS.PRESTADO, ESTADOS.SIN_ENTREGAR)) return "prestado";
   if (esEstado(estado, ESTADOS.NO_RESPONDE)) return "falta";
