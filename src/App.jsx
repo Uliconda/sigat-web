@@ -1,79 +1,38 @@
 // src/App.jsx
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
-
-// Importamos nuestras pantallas y componentes principales
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import Inventory from "./pages/Inventory"; 
-import Users from "./pages/Users";
-import QrGenerator from "./pages/QrGenerator"; 
 import { ProtectedRoute } from "./components/ProtectedRoute";
-import Maintenance from "./pages/Maintenance";
+import { PantallaEstado } from "./components/PantallaEstado";
 
+// Cada pantalla se descarga solo cuando se abre: el login no carga gráficas ni reportes.
+const Login = lazy(() => import("./pages/Login"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Inventory = lazy(() => import("./pages/Inventory"));
+const Users = lazy(() => import("./pages/Users"));
+const QrGenerator = lazy(() => import("./pages/QrGenerator"));
+const Maintenance = lazy(() => import("./pages/Maintenance"));
 
+const privada = (pagina) => <ProtectedRoute>{pagina}</ProtectedRoute>;
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* --- RUTA PÚBLICA --- */}
-        <Route path="/" element={<Login />} />
+      <Suspense fallback={<PantallaEstado tipo="cargando" />}>
+        <Routes>
+          {/* --- RUTA PÚBLICA --- */}
+          <Route path="/" element={<Login />} />
 
-        {/* --- RUTAS PRIVADAS (PROTEGIDAS) --- */}
-        
-        {/* 1. Panel Principal */}
-        <Route 
-          path="/dashboard" 
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          } 
-        />
+          {/* --- RUTAS PRIVADAS (solo administradores) --- */}
+          <Route path="/dashboard" element={privada(<Dashboard />)} />
+          <Route path="/inventario" element={privada(<Inventory />)} />
+          <Route path="/usuarios" element={privada(<Users />)} />
+          <Route path="/qr" element={privada(<QrGenerator />)} />
+          <Route path="/mantenimiento" element={privada(<Maintenance />)} />
 
-        {/* 2. Inventario Profesional */}
-        <Route 
-          path="/inventario" 
-          element={
-            <ProtectedRoute>
-              <Inventory />
-            </ProtectedRoute>
-          } 
-        />
-
-        {/* 3. Gestión de Usuarios */}
-        <Route 
-          path="/usuarios" 
-          element={
-            <ProtectedRoute>
-              <Users />
-            </ProtectedRoute>
-          } 
-        />
-
-        {/* 4. Generador de QR */}
-        <Route 
-          path="/qr" 
-          element={
-            <ProtectedRoute>
-              <QrGenerator />
-            </ProtectedRoute>
-          } 
-        />
-
-        {/* 5. Mantenimiento Preventivo (RCM) */}
-        <Route 
-          path="/mantenimiento" 
-          element={
-            <ProtectedRoute>
-              <Maintenance />
-            </ProtectedRoute>
-          } 
-        />
-
-        {/* Cualquier otra URL vuelve al inicio. */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* Cualquier otra URL vuelve al inicio. */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

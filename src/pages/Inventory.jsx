@@ -13,9 +13,8 @@ import Sidebar from "../components/Sidebar";
 import QRCode from "qrcode";
 import { descargarExcel } from "../utils/excel";
 import { escapeHtml } from "../utils/html";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable"; 
 import Swal from 'sweetalert2';
+import { mensajeDeError } from "../utils/errores";
 
 export default function Inventory() {
   const [equipos, setEquipos] = useState([]);
@@ -85,7 +84,7 @@ export default function Inventory() {
       Swal.fire({ title: '¡Actualizado!', text: `El equipo ahora está ${nuevoEstado}.`, icon: 'success', timer: 2000, showConfirmButton: false });
     } catch (error) {
       console.error("Error al actualizar:", error);
-      Swal.fire('Error', 'Hubo un problema de conexión al guardar el movimiento.', 'error');
+      Swal.fire('No se guardó el movimiento', mensajeDeError(error), 'error');
     }
   };
 
@@ -129,7 +128,7 @@ export default function Inventory() {
       Swal.fire({ title: '¡Equipo Dado de Baja!', icon: 'success', timer: 2000, showConfirmButton: false });
     } catch (error) {
       console.error("Error al dar de baja:", error);
-      Swal.fire('Error', 'Hubo un problema al dar de baja el equipo.', 'error');
+      Swal.fire('No se pudo dar de baja', mensajeDeError(error), 'error');
     }
   };
 
@@ -173,7 +172,7 @@ export default function Inventory() {
       Swal.fire({ title: '¡Equipo Reactivado!', text: 'El equipo ahora está Disponible nuevamente.', icon: 'success', timer: 2000, showConfirmButton: false });
     } catch (error) {
       console.error("Error al reactivar:", error);
-      Swal.fire('Error', 'Hubo un problema al reactivar el equipo.', 'error');
+      Swal.fire('No se pudo reactivar', mensajeDeError(error), 'error');
     }
   };
 
@@ -407,7 +406,7 @@ export default function Inventory() {
 
     } catch (error) {
       console.error("Error al generar Excel:", error);
-      Swal.fire("Error", "Error al descargar el historial. Revisa la consola.", "error");
+      Swal.fire("No se pudo generar el Excel", mensajeDeError(error), "error");
     }
   };
 
@@ -513,6 +512,11 @@ export default function Inventory() {
       return;
     }
 
+    // jsPDF se carga solo al exportar para no aumentar la carga inicial.
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+    ]);
     const doc = new jsPDF("landscape");
     
     const tituloPDF = seleccion === "Todo" 
@@ -573,10 +577,10 @@ export default function Inventory() {
   };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-color)", transition: "0.3s" }}>
+    <div className="app-layout">
       <Sidebar />
 
-      <main style={{ marginLeft: "250px", flex: 1, padding: "40px" }}>
+      <main className="app-main">
         <header style={styles.header}>
           <div>
             <h1 style={styles.title}>Inventario y Reportes</h1>
@@ -621,7 +625,8 @@ export default function Inventory() {
         <div style={styles.searchContainer}>
           <span style={{ marginRight: "10px" }}>🔍</span>
           <input
-            type="text"
+            type="search"
+            aria-label="Buscar equipos"
             placeholder="Buscar por nombre o ID..."
             style={styles.searchInput}
             value={searchTerm}
@@ -700,23 +705,23 @@ export default function Inventory() {
 // ==========================================
 const styles = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "30px", flexWrap: "wrap", gap: "20px" },
-  title: { margin: 0, fontSize: "28px", color: "var(--text-color)", transition: "0.3s" },
+  title: { margin: 0, fontSize: "clamp(22px, 5vw, 28px)", color: "var(--text-color)", transition: "0.3s" },
   subtitle: { margin: "5px 0 0 0", color: "var(--text-color)", opacity: 0.7, transition: "0.3s" },
   actions: { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" },
-  exportGroup: { display: "flex", backgroundColor: "var(--card-bg)", borderRadius: "8px", border: "1px solid var(--border-color)", overflow: "hidden", transition: "0.3s" },
+  exportGroup: { display: "flex", flexWrap: "wrap", maxWidth: "100%", backgroundColor: "var(--card-bg)", borderRadius: "8px", border: "1px solid var(--border-color)", overflow: "hidden", transition: "0.3s" },
   selectFilter: { border: "none", padding: "12px 10px", outline: "none", backgroundColor: "transparent", color: "var(--text-color)", borderRight: "1px solid var(--border-color)", cursor: "pointer", fontSize: "14px" },
-  datePickerContainer: { display: "flex", alignItems: "center", gap: "8px", padding: "0 10px", borderRight: "1px solid var(--border-color)", backgroundColor: "var(--bg-color)" },
+  datePickerContainer: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", padding: "8px 10px", borderRight: "1px solid var(--border-color)", backgroundColor: "var(--bg-color)" },
   dateInput: { border: "1px solid var(--border-color)", borderRadius: "4px", padding: "5px", outline: "none", backgroundColor: "var(--card-bg)", color: "var(--text-color)", fontSize: "13px" },
-  btnExportExcel: { backgroundColor: "#217346", color: "white", border: "none", padding: "12px 18px", cursor: "pointer", fontWeight: "600", transition: "0.2s" },
+  btnExportExcel: { flexGrow: 1, backgroundColor: "#217346", color: "white", border: "none", padding: "12px 18px", cursor: "pointer", fontWeight: "600", transition: "0.2s" },
   btnExportPdf: { backgroundColor: "#d32f2f", color: "white", border: "none", padding: "12px 18px", borderRadius: "8px", cursor: "pointer", fontWeight: "600", transition: "0.2s" },
   searchContainer: { backgroundColor: "var(--card-bg)", padding: "12px 20px", borderRadius: "12px", display: "flex", alignItems: "center", marginBottom: "25px", border: "1px solid var(--border-color)", transition: "0.3s" },
   searchInput: { border: "none", outline: "none", width: "100%", fontSize: "16px", backgroundColor: "transparent", color: "var(--text-color)" },
-  tableCard: { backgroundColor: "var(--card-bg)", borderRadius: "15px", border: "1px solid var(--border-color)", overflow: "hidden", boxShadow: "0 4px 6px rgba(0,0,0,0.02)", transition: "0.3s" },
-  table: { width: "100%", borderCollapse: "collapse", textAlign: "left" },
+  tableCard: { backgroundColor: "var(--card-bg)", borderRadius: "15px", border: "1px solid var(--border-color)", overflowX: "auto", WebkitOverflowScrolling: "touch", boxShadow: "0 4px 6px rgba(0,0,0,0.02)", transition: "0.3s" },
+  table: { width: "100%", minWidth: "720px", borderCollapse: "collapse", textAlign: "left" },
   theadRow: { backgroundColor: "var(--bg-color)", borderBottom: "2px solid var(--border-color)", transition: "0.3s" },
-  th: { padding: "18px 20px", fontSize: "13px", color: "var(--text-color)", opacity: 0.7, fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" },
+  th: { padding: "14px 16px", fontSize: "13px", color: "var(--text-color)", opacity: 0.7, fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" },
   tr: { borderBottom: "1px solid var(--border-color)", transition: "0.2s" },
-  td: { padding: "18px 20px", color: "var(--text-color)", fontSize: "15px" },
+  td: { padding: "14px 16px", color: "var(--text-color)", fontSize: "14px" },
   statusBadge: { padding: "6px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "700", textTransform: "uppercase" },
   btnAction: { backgroundColor: "var(--bg-color)", color: "var(--text-color)", border: "1px solid var(--border-color)", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "bold", transition: "0.3s" },
   btnQr: { backgroundColor: "#5E35B1", color: "white", border: "none", padding: "8px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "bold" },

@@ -1,188 +1,143 @@
 // src/components/Sidebar.jsx
-import { useContext, useEffect, useState } from "react"; 
-import { useNavigate, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../config/supabase";
 import { subscribeToEquipos } from "../services/supabaseData";
-import { ThemeContext } from "../context/theme"; 
-import logo from '../assets/assets_buho.png'; 
+import logo from "../assets/logo-buho.webp";
+import "./Sidebar.css";
 
-export default function Sidebar() {
-const navigate = useNavigate();
-const location = useLocation();
-const { theme } = useContext(ThemeContext); 
-
-// Nuevo estado para contar las alertas urgentes
-const [urgentCount, setUrgentCount] = useState(0);
-
-// Escuchar en tiempo real los equipos para calcular mantenimientos urgentes
-useEffect(() => {
-const unsubscribe = subscribeToEquipos((equipos) => {
-    let count = 0;
-    equipos.forEach((equipo) => {
-    const dateVal = equipo.fecha_revision || equipo.lastCheck;
-    
-    if (dateVal) {
-        const date = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
-        const diffMs = Date.now() - date.getTime();
-        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        
-        // Si han pasado más de 90 días, lo contamos como urgente
-        if (diffDays > 90) {
-        count++;
-        }
-    }
-    });
-    setUrgentCount(count);
-}, (error) => console.error("Error al cargar equipos para mantenimiento:", error));
-
-return () => unsubscribe();
-}, []);
-
-const menuItems = [
-{ name: "Dashboard", path: "/dashboard", icon: "📊" },
-{ name: "Inventario", path: "/inventario", icon: "📦" },
-{ name: "Usuarios", path: "/usuarios", icon: "👥" },
-{ name: "Mantenimiento", path: "/mantenimiento", icon: "🛠️" },        
+const MENU = [
+  { name: "Dashboard", path: "/dashboard", icon: "📊" },
+  { name: "Inventario", path: "/inventario", icon: "📦" },
+  { name: "Usuarios", path: "/usuarios", icon: "👥" },
+  { name: "Mantenimiento", path: "/mantenimiento", icon: "🛠️" },
 ];
 
-const handleLogout = async () => {
-const { error } = await supabase.auth.signOut();
-if (error) {
-    console.error("Error al cerrar sesión:", error);
-    return;
+const DIAS_MANTENIMIENTO = 90;
+
+// Cuenta los equipos sin revisión en más de 90 días.
+function contarUrgentes(equipos) {
+  const limite = Date.now() - DIAS_MANTENIMIENTO * 24 * 60 * 60 * 1000;
+  return equipos.filter((equipo) => {
+    const valor = equipo.fecha_revision || equipo.lastCheck;
+    if (!valor) return false;
+    const fecha = valor.toDate ? valor.toDate() : new Date(valor);
+    return fecha.getTime() < limite;
+  }).length;
 }
-navigate("/");
-};
 
-const getActiveBgColor = (path) => {
-if (location.pathname !== path) return "transparent";
-return theme === "dark" ? "#333333" : "#f0f0f0";
-};
+export default function Sidebar() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [urgentCount, setUrgentCount] = useState(0);
+  const [abierto, setAbierto] = useState(false);
+  const [rutaAbierta, setRutaAbierta] = useState(location.pathname);
 
-return (
-<>
-    <div style={styles.sidebar}>
-    <div style={styles.logoSection}>
-        <img src={logo} alt="Logo de la Escuela" style={styles.logoImage} />
-        <h2 style={styles.logoText}>SIGAT <span style={{color: '#ff6600'}}>WEB</span></h2>
-    </div>
-    
-    <nav style={styles.nav}>
-        {menuItems.map((item) => (
-        <div
-            key={item.path}
-            onClick={() => navigate(item.path)}
-            style={{
-            ...styles.navItem,
-            backgroundColor: getActiveBgColor(item.path), 
-            borderRight: location.pathname === item.path ? "4px solid #ff6600" : "none",
-            color: "var(--text-color)" 
-            }}
+  // Al cambiar de página el menú del celular se cierra solo.
+  if (abierto && rutaAbierta !== location.pathname) {
+    setAbierto(false);
+  }
+
+  useEffect(
+    () =>
+      subscribeToEquipos(
+        (equipos) => setUrgentCount(contarUrgentes(equipos)),
+        (error) => console.error("Error al cargar equipos para mantenimiento:", error)
+      ),
+    []
+  );
+
+  // Escape cierra el menú y se bloquea el scroll del fondo mientras está abierto.
+  useEffect(() => {
+    if (!abierto) return undefined;
+    const onKey = (event) => event.key === "Escape" && setAbierto(false);
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [abierto]);
+
+  const abrirMenu = () => {
+    setRutaAbierta(location.pathname);
+    setAbierto(true);
+  };
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("Error al cerrar sesión:", error);
+      return;
+    }
+    navigate("/");
+  };
+
+  const paginaActual = MENU.find((item) => item.path === location.pathname)?.name ?? "SIGAT";
+
+  return (
+    <>
+      {/* Barra superior: solo en celular y tablet */}
+      <header className="topbar">
+        <button
+          type="button"
+          className="topbar__menu"
+          onClick={abrirMenu}
+          aria-label="Abrir menú"
+          aria-expanded={abierto}
+          aria-controls="sidebar"
         >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <span style={styles.icon}>{item.icon}</span>
-            <span style={styles.linkText}>{item.name}</span>
-            </div>
+          <span aria-hidden="true">☰</span>
+          {urgentCount > 0 && <span className="topbar__punto" aria-hidden="true" />}
+        </button>
+        <span className="topbar__titulo">{paginaActual}</span>
+        <img src={logo} alt="" className="topbar__logo" width="32" height="32" />
+      </header>
 
-            {/* Si es la pestaña de mantenimiento y hay urgencias, mostramos el badge rojo */}
-            {item.name === "Mantenimiento" && urgentCount > 0 && (
-            <span style={styles.badge}>{urgentCount}</span>
-            )}
+      <div
+        className={`sidebar-fondo${abierto ? " sidebar-fondo--visible" : ""}`}
+        onClick={() => setAbierto(false)}
+        aria-hidden="true"
+      />
+
+      <aside id="sidebar" className={`sidebar${abierto ? " sidebar--abierto" : ""}`} aria-label="Menú principal">
+        <div className="sidebar__logo">
+          <img src={logo} alt="Logo de la escuela" width="120" height="125" />
+          <h2>
+            SIGAT <span>WEB</span>
+          </h2>
+          <button type="button" className="sidebar__cerrar" onClick={() => setAbierto(false)} aria-label="Cerrar menú">
+            ✕
+          </button>
         </div>
-        ))}
-    </nav>
 
-    <button onClick={handleLogout} style={styles.logoutBtn}>
-        Cerrar Sesión
-    </button>
-    </div>
+        <nav className="sidebar__nav">
+          {MENU.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) => `sidebar__item${isActive ? " sidebar__item--activo" : ""}`}
+            >
+              <span className="sidebar__item-icono" aria-hidden="true">{item.icon}</span>
+              <span className="sidebar__item-texto">{item.name}</span>
+              {item.path === "/mantenimiento" && urgentCount > 0 && (
+                <span className="sidebar__badge" aria-label={`${urgentCount} urgentes`}>{urgentCount}</span>
+              )}
+            </NavLink>
+          ))}
+        </nav>
 
-    {/* Notificación Flotante Global (Aparece en cualquier ventana) */}
-    {urgentCount > 0 && location.pathname !== "/mantenimiento" && (
-    <div 
-        style={styles.floatingAlert} 
-        onClick={() => navigate("/mantenimiento")}
-        title="Ir a mantenimiento"
-    >
-        ⚠️ Tienes {urgentCount} {urgentCount === 1 ? "equipo" : "equipos"} con mantenimiento <b>URGENTE</b>.
-    </div>
-    )}
-</>
-);
+        <button type="button" className="sidebar__salir" onClick={handleLogout}>
+          Cerrar sesión
+        </button>
+      </aside>
+
+      {/* Aviso flotante de mantenimiento urgente en cualquier pantalla */}
+      {urgentCount > 0 && location.pathname !== "/mantenimiento" && (
+        <button type="button" className="aviso-urgente" onClick={() => navigate("/mantenimiento")}>
+          ⚠️ {urgentCount} {urgentCount === 1 ? "equipo" : "equipos"} con mantenimiento <b>URGENTE</b>
+        </button>
+      )}
+    </>
+  );
 }
-
-const styles = {
-sidebar: {
-width: "250px",
-height: "100vh",
-backgroundColor: "var(--card-bg)", 
-borderRight: "1px solid var(--border-color)", 
-display: "flex",
-flexDirection: "column",
-position: "fixed",
-left: 0,
-top: 0,
-transition: "0.3s",
-zIndex: 100 
-},
-logoSection: {
-padding: "30px 20px",
-borderBottom: "1px solid var(--border-color)", 
-textAlign: "center",
-display: "flex",
-flexDirection: "column",
-alignItems: "center",
-gap: "10px",
-transition: "0.3s"
-},
-logoImage: { width: "120px", height: "auto", objectFit: "contain" },
-logoText: { margin: 0, fontSize: "22px", fontWeight: "800", color: "var(--text-color)", transition: "0.3s" },
-nav: { flex: 1, padding: "20px 0" },
-navItem: {
-display: "flex",
-alignItems: "center",
-justifyContent: "space-between", // Permite separar el texto del badge
-padding: "15px 25px",
-cursor: "pointer",
-transition: "0.3s",
-},
-linkText: { fontSize: "16px", fontWeight: "500", color: "inherit" },
-icon: { fontSize: "20px" },
-badge: {
-backgroundColor: "#ff4444",
-color: "white",
-fontSize: "12px",
-fontWeight: "bold",
-padding: "2px 8px",
-borderRadius: "12px",
-},
-logoutBtn: {
-margin: "20px",
-padding: "12px",
-backgroundColor: "transparent", 
-border: "1px solid #ff6600",
-color: "#ff6600",
-borderRadius: "8px",
-cursor: "pointer",
-fontWeight: "600",
-transition: "0.3s"
-},
-// Estilos de la notificación flotante
-floatingAlert: {
-position: "fixed",
-bottom: "30px",
-right: "30px",
-backgroundColor: "#ff4444",
-color: "white",
-padding: "15px 20px",
-borderRadius: "8px",
-boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
-cursor: "pointer",
-zIndex: 9999, // Para que siempre esté por encima de las tablas
-fontSize: "14px",
-display: "flex",
-alignItems: "center",
-gap: "10px",
-transition: "transform 0.2s",
-}
-};

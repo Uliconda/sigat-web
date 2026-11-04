@@ -4,6 +4,7 @@ import Sidebar from "../components/Sidebar";
 import Swal from "sweetalert2";
 import { addHistorial, getEquipos, updateEquipo } from "../services/supabaseData";
 import { useAuth } from "../context/useAuth";
+import { mensajeDeError } from "../utils/errores";
 
 const Maintenance = () => {
 const [maintenanceAlerts, setMaintenanceAlerts] = useState([]);
@@ -110,15 +111,15 @@ try {
 
 } catch (error) {
     console.error("Error al guardar mantenimiento:", error);
-    Swal.fire('Error', 'Hubo un problema al conectar con la base de datos.', 'error');
+    Swal.fire('No se guardó el mantenimiento', mensajeDeError(error), 'error');
 }
 };
 
 return (
-<div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-color)", transition: "0.3s" }}>
+<div className="app-layout">
     <Sidebar />
     
-    <main style={{ marginLeft: "250px", flex: 1, padding: "40px" }}>
+    <main className="app-main">
     <header style={styles.header}>
         <div>
         <h1 style={styles.title}>Mantenimiento Preventivo (RCM)</h1>
@@ -188,15 +189,15 @@ return (
 // ==========================================
 const styles = {
 header: { marginBottom: "30px" },
-title: { margin: 0, fontSize: "28px", color: "var(--text-color)", transition: "0.3s" },
+title: { margin: 0, fontSize: "clamp(22px, 5vw, 28px)", color: "var(--text-color)", transition: "0.3s" },
 subtitle: { margin: "5px 0 0 0", color: "var(--text-color)", opacity: 0.7, transition: "0.3s" },
 
-tableCard: { backgroundColor: "var(--card-bg)", borderRadius: "15px", border: "1px solid var(--border-color)", overflow: "hidden", boxShadow: "0 4px 6px rgba(0,0,0,0.02)", transition: "0.3s" },
-table: { width: "100%", borderCollapse: "collapse", textAlign: "left" },
+tableCard: { backgroundColor: "var(--card-bg)", borderRadius: "15px", border: "1px solid var(--border-color)", overflowX: "auto", WebkitOverflowScrolling: "touch", boxShadow: "0 4px 6px rgba(0,0,0,0.02)", transition: "0.3s" },
+table: { width: "100%", minWidth: "640px", borderCollapse: "collapse", textAlign: "left" },
 theadRow: { backgroundColor: "var(--bg-color)", borderBottom: "2px solid var(--border-color)", transition: "0.3s" },
-th: { padding: "18px 20px", fontSize: "13px", color: "var(--text-color)", opacity: 0.7, fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" },
+th: { padding: "14px 16px", fontSize: "13px", color: "var(--text-color)", opacity: 0.7, fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.5px" },
 tr: { borderBottom: "1px solid var(--border-color)", transition: "0.2s" },
-td: { padding: "18px 20px", color: "var(--text-color)", fontSize: "15px" },
+td: { padding: "14px 16px", color: "var(--text-color)", fontSize: "14px" },
 
 statusBadge: { padding: "6px 12px", borderRadius: "20px", fontSize: "12px", fontWeight: "700", textTransform: "uppercase", display: "inline-block" },
 btnAction: { backgroundColor: "#ff6600", color: "white", border: "none", padding: "10px 15px", borderRadius: "6px", cursor: "pointer", fontSize: "13px", fontWeight: "bold", transition: "0.3s" },

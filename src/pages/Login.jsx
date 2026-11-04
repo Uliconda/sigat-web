@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../config/supabase";
 import { getProfile } from "../services/supabaseData";
 import { useAuth } from "../context/useAuth";
+import logo from "../assets/logo-buho.webp";
+import { errorDeFuncion, mensajeDeError } from "../utils/errores";
 
 export default function Login() {
 const [email, setEmail] = useState("");
@@ -111,7 +113,7 @@ const handleNewPassword = async (e) => {
             const { error: changeError } = await supabase.functions.invoke("manage-users", {
                 body: { action: "set-initial-password", newPassword },
             });
-            if (changeError) throw changeError;
+            if (changeError) throw await errorDeFuncion(changeError);
             setMustChangePassword(false);
             await refreshProfile();
         } else {
@@ -124,7 +126,9 @@ const handleNewPassword = async (e) => {
         navigate("/dashboard");
     } catch (err) {
         console.error("Error al actualizar la contraseña:", err);
-        setError("No se pudo actualizar la contraseña. Solicita un nuevo enlace.");
+        setError(mustChangePassword
+            ? mensajeDeError(err, "No se pudo actualizar la contraseña.")
+            : "No se pudo actualizar la contraseña. Solicita un nuevo enlace.");
     } finally {
         setLoading(false);
     }
@@ -133,6 +137,7 @@ const handleNewPassword = async (e) => {
 return (
 <div style={styles.container}>
     <div style={styles.card}>
+    <img src={logo} alt="" width="88" height="92" style={{ display: "block", margin: "0 auto 12px", height: "auto" }} />
     <h2 style={styles.title}>SIGAT Admin</h2>
     <p style={styles.subtitle}>
         {mustChangePassword || recovery
@@ -275,26 +280,29 @@ container: {
 display: "flex",
 justifyContent: "center",
 alignItems: "center",
-height: "100vh",
-backgroundColor: "#f4f7f6",
+minHeight: "100vh",
+padding: "16px",
+backgroundColor: "var(--bg-color)",
 },
 card: {
-backgroundColor: "white",
-padding: "40px",
-borderRadius: "10px",
-boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+backgroundColor: "var(--card-bg)",
+color: "var(--text-color)",
+padding: "clamp(24px, 6vw, 40px)",
+borderRadius: "16px",
+border: "1px solid var(--border-color)",
+boxShadow: "var(--shadow-md)",
 width: "100%",
 maxWidth: "400px",
 },
 title: {
 textAlign: "center",
 marginBottom: "5px",
-color: "#333",
+color: "var(--text-color)",
 },
 subtitle: {
 textAlign: "center",
 marginBottom: "20px",
-color: "#666",
+color: "var(--text-muted)",
 },
 form: {
 display: "flex",
@@ -307,17 +315,19 @@ flexDirection: "column",
 gap: "5px",
 },
 input: {
-padding: "10px",
-borderRadius: "5px",
-border: "1px solid #ccc",
-fontSize: "16px",
+padding: "12px",
+borderRadius: "8px",
+border: "1px solid var(--border-color)",
+backgroundColor: "var(--input-bg)",
+color: "var(--text-color)",
+fontSize: "16px", // 16px evita el zoom automático de iPhone al enfocar
 },
 button: {
 padding: "12px",
-backgroundColor: "#ff6600", // Color naranja de SIGAT
+backgroundColor: "var(--primary)",
 color: "white",
 border: "none",
-borderRadius: "5px",
+borderRadius: "8px",
 fontSize: "16px",
 cursor: "pointer",
 fontWeight: "bold",
@@ -326,24 +336,25 @@ marginTop: "10px",
 resetButton: {
 background: "none",
 border: "none",
-color: "#ff6600",
+color: "var(--primary)",
 cursor: "pointer",
 marginTop: "12px",
+padding: "8px",
 },
 errorBox: {
-backgroundColor: "#ffe6e6",
-color: "#d9534f",
+backgroundColor: "rgba(198, 40, 40, 0.12)",
+color: "var(--danger)",
 padding: "10px",
-borderRadius: "5px",
+borderRadius: "8px",
 marginBottom: "15px",
 textAlign: "center",
 fontSize: "14px",
 },
 successBox: {
-backgroundColor: "#e8f5e9",
-color: "#256029",
+backgroundColor: "rgba(46, 125, 50, 0.12)",
+color: "var(--success)",
 padding: "10px",
-borderRadius: "5px",
+borderRadius: "8px",
 marginBottom: "15px",
 textAlign: "center",
 fontSize: "14px",

@@ -9,6 +9,7 @@ import Sidebar from "../components/Sidebar";
 import Swal from "sweetalert2";
 import { useAuth } from "../context/useAuth";
 import { escapeHtml } from "../utils/html";
+import { errorDeFuncion, mensajeDeError } from "../utils/errores";
 
 export default function Users() {
 // EXTRAEMOS user (para el ID) Y userData (para el rol)
@@ -43,7 +44,7 @@ try {
         rol: formData.rol,
       },
     });
-    if (error) throw error;
+    if (error) throw await errorDeFuncion(error);
 
     Swal.fire({
     icon: 'success',
@@ -56,7 +57,7 @@ try {
     setFormData({ nombre: "", email: "", password: "", rol: "usuario" });
 } catch (error) {
     console.error(error);
-    Swal.fire('Error', `No se pudo crear: ${error.message}`, 'error');
+    Swal.fire('No se pudo crear la cuenta', mensajeDeError(error), 'error');
 }
 setLoading(false);
 };
@@ -158,7 +159,7 @@ if (formValues) {
 
     } catch (error) {
     console.error("Error al editar:", error);
-    Swal.fire('Error', 'No se pudieron guardar los cambios.', 'error');
+    Swal.fire('No se pudieron guardar los cambios', mensajeDeError(error), 'error');
     }
 }
 };
@@ -202,23 +203,23 @@ if (result.isConfirmed) {
     const { error } = await supabase.functions.invoke("manage-users", {
         body: { action: "delete", userId: targetUser.id },
     });
-    if (error) throw error;
+    if (error) throw await errorDeFuncion(error);
     Swal.fire('¡Eliminado!', 'El usuario ha sido removido.', 'success');
     } catch (error) {
     console.error("Error al eliminar usuario:", error);
-    Swal.fire('Error', 'No se pudo eliminar al usuario.', 'error');
+    Swal.fire('No se pudo eliminar al usuario', mensajeDeError(error), 'error');
     }
 }
 };
 
 return (
 // Cambiamos el fondo general
-<div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-color)", transition: "0.3s" }}>
+<div className="app-layout">
     <Sidebar />
 
-    <main style={{ marginLeft: "250px", flex: 1, padding: "40px", display: "flex", gap: "30px" }}>
+    <main className="app-main usuarios-main">
 
-    <div style={{ flex: 2 }}>
+    <div style={{ flex: 2, minWidth: 0 }}>
         <h1 style={styles.title}>Gestión de Usuarios</h1>
         <p style={styles.subtitle}>Lista de personas con acceso al sistema</p>
 
@@ -334,11 +335,11 @@ return (
 // ESTILOS ADAPTADOS AL MODO OSCURO
 // ==========================================
 const styles = {
-title: { margin: 0, fontSize: "28px", color: "var(--text-color)", transition: "0.3s" },
+title: { margin: 0, fontSize: "clamp(22px, 5vw, 28px)", color: "var(--text-color)", transition: "0.3s" },
 subtitle: { color: "var(--text-color)", opacity: 0.7, marginBottom: "30px", transition: "0.3s" },
 
-tableCard: { backgroundColor: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", overflow: "hidden", transition: "0.3s" },
-table: { width: "100%", borderCollapse: "collapse" },
+tableCard: { backgroundColor: "var(--card-bg)", borderRadius: "12px", border: "1px solid var(--border-color)", overflowX: "auto", WebkitOverflowScrolling: "touch", transition: "0.3s" },
+table: { width: "100%", minWidth: "560px", borderCollapse: "collapse" },
 theadRow: { backgroundColor: "var(--bg-color)", borderBottom: "2px solid var(--border-color)", transition: "0.3s" },
 th: { padding: "15px 20px", textAlign: "left", color: "var(--text-color)", opacity: 0.7, fontSize: "12px", textTransform: "uppercase" },
 tr: { borderBottom: "1px solid var(--border-color)", transition: "0.3s" },

@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   verificar:
-    name: Lint, build y esquema de base de datos
+    name: Lint, build, pruebas y esquema de base de datos
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -31,6 +31,9 @@ jobs:
 
       - name: Compilar
         run: npm run build
+
+      - name: Pruebas de la web
+        run: npm run test:web
 
       - name: Esquema de Supabase en PostgreSQL (PGlite)
         run: npm run test:db

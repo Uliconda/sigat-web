@@ -2,6 +2,7 @@
 import { useState, useEffect, useContext } from "react"; 
 import {
   addHistorial,
+  DIAS_HISTORIAL_DASHBOARD,
   notificarPrestamo,
   subscribeToEquipos,
   subscribeToHistorial,
@@ -11,6 +12,7 @@ import { useAuth } from "../context/useAuth";
 import { ThemeContext } from "../context/theme"; 
 import Sidebar from "../components/Sidebar";
 import Swal from 'sweetalert2'; 
+import { mensajeDeError } from "../utils/errores";
 import { 
   PieChart, Pie, Cell, 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -103,7 +105,7 @@ export default function Dashboard() {
             conteoHoras[hora] = (conteoHoras[hora] || 0) + 1;
           }
         }
-      }, (error) => console.error("Error al cargar historial desde Supabase:", error));
+      });
 
       const top = Object.keys(conteoEquipos)
         .map(key => ({ equipo: key, prestamos: conteoEquipos[key] }))
@@ -114,7 +116,7 @@ export default function Dashboard() {
         .map(key => ({ hora: key, cantidad: conteoHoras[key], num: parseInt(key) }))
         .sort((a, b) => a.num - b.num);
       setHorariosPico(horas);
-    });
+    }, (error) => console.error("Error al cargar historial desde Supabase:", error));
 
     return () => unsubscribe();
   }, []);
@@ -151,7 +153,7 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error("Error en handleToggleFalta:", error);
-      Swal.fire('Error', error.message || 'No se pudo actualizar la falta.', 'error');
+      Swal.fire('No se pudo actualizar la falta', mensajeDeError(error), 'error');
     }
   };
 
@@ -180,14 +182,14 @@ export default function Dashboard() {
 
     } catch (error) {
       console.error("Error al reenviar el correo:", error);
-      Swal.fire('Error', error.message || 'No se pudo enviar el correo.', 'error');
+      Swal.fire('No se pudo enviar el correo', mensajeDeError(error), 'error');
     }
   };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "var(--bg-color)", transition: "0.3s" }}>
+    <div className="app-layout">
       <Sidebar />
-      <main style={{ marginLeft: "250px", flex: 1, padding: "40px", overflowY: "auto" }}>
+      <main className="app-main">
         
         {/* HEADER */}
         <header style={styles.header}>
@@ -197,7 +199,7 @@ export default function Dashboard() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
             <div style={styles.dateBox}>Hoy: {new Date().toLocaleDateString()}</div>
-            <button onClick={toggleTheme} style={styles.themeButton}>{theme === "light" ? "🌙" : "☀️"}</button>
+            <button onClick={toggleTheme} style={styles.themeButton} aria-label={theme === "light" ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}>{theme === "light" ? "🌙" : "☀️"}</button>
           </div>
         </header>
 
@@ -228,7 +230,7 @@ export default function Dashboard() {
         <h2 style={{...styles.chartTitle, marginTop: '20px'}}>Métricas de Uso</h2>
         <div style={styles.chartsContainer}>
           <div style={styles.chartCard}>
-            <h3 style={styles.chartTitle}>Top 5: Equipos más pedidos</h3>
+            <h3 style={styles.chartTitle}>Top 5: Equipos más pedidos <small style={{ opacity: 0.6, fontWeight: 400 }}>(últimos {DIAS_HISTORIAL_DASHBOARD} días)</small></h3>
             <div style={{ height: 250 }}>
               <ResponsiveContainer>
                 <BarChart data={topEquipos}>
@@ -243,7 +245,7 @@ export default function Dashboard() {
           </div>
 
           <div style={styles.chartCard}>
-            <h3 style={styles.chartTitle}>Horarios Pico (Préstamos)</h3>
+            <h3 style={styles.chartTitle}>Horarios Pico (Préstamos) <small style={{ opacity: 0.6, fontWeight: 400 }}>(últimos {DIAS_HISTORIAL_DASHBOARD} días)</small></h3>
             <div style={{ height: 250 }}>
               <ResponsiveContainer>
                 <LineChart data={horariosPico}>
@@ -351,18 +353,18 @@ export default function Dashboard() {
 }
 
 const styles = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "30px" },
   title: { margin: 0, fontSize: "26px", color: "var(--text-color)" },
   subtitle: { margin: 0, opacity: 0.7, color: "var(--text-color)" },
   dateBox: { backgroundColor: "var(--card-bg)", padding: "8px 15px", borderRadius: "8px", border: "1px solid var(--border-color)", color: "var(--text-color)" },
-  themeButton: { background: "none", border: "1px solid var(--border-color)", borderRadius: "50%", cursor: "pointer", width: "40px", height: "40px" },
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "20px", marginBottom: "20px" },
+  themeButton: { background: "none", border: "1px solid var(--border-color)", borderRadius: "50%", cursor: "pointer", width: "40px", height: "40px", flexShrink: 0 },
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))", gap: "16px", marginBottom: "20px" },
   card: { backgroundColor: "var(--card-bg)", padding: "20px", borderRadius: "12px", display: "flex", alignItems: "center", gap: "15px", border: "1px solid var(--border-color)" },
   iconCircle: { width: "45px", height: "45px", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" },
   cardLabel: { margin: 0, fontSize: "12px", opacity: 0.6, color: "var(--text-color)" },
   cardNumber: { margin: 0, fontSize: "24px", color: "var(--text-color)" },
   chartsContainer: { display: "flex", gap: "20px", flexWrap: "wrap", marginBottom: "20px" },
-  chartCard: { flex: 1, minWidth: "350px", backgroundColor: "var(--card-bg)", padding: "20px", borderRadius: "12px", border: "1px solid var(--border-color)" },
+  chartCard: { flex: 1, minWidth: "min(100%, 340px)", backgroundColor: "var(--card-bg)", padding: "20px", borderRadius: "12px", border: "1px solid var(--border-color)" },
   chartTitle: { margin: "0 0 15px 0", fontSize: "16px", color: "var(--text-color)" },
   listContainer: { backgroundColor: "var(--card-bg)", padding: "20px", borderRadius: "12px", border: "1px solid var(--border-color)" },
   tableWrapper: { overflowX: "auto" },
@@ -370,7 +372,7 @@ const styles = {
   theadRow: { borderBottom: "2px solid var(--border-color)", textAlign: "left" },
   th: { padding: "12px", fontSize: "12px", color: "var(--text-color)", opacity: 0.6 },
   tr: { borderBottom: "1px solid var(--border-color)" },
-  td: { padding: "12px", fontSize: "13px", color: "var(--text-color)" },
+  td: { padding: "12px", fontSize: "13px", color: "var(--text-color)", whiteSpace: "nowrap" },
   statusBadge: { padding: "4px 10px", borderRadius: "12px", fontSize: "10px", fontWeight: "bold" },
   actionBtn: { border: "none", color: "white", padding: "5px 10px", borderRadius: "6px", cursor: "pointer", fontSize: "11px" }
 };
