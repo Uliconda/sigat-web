@@ -1,11 +1,11 @@
 // src/components/ProtectedRoute.jsx
 import { Navigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 
 export function ProtectedRoute({ children }) {
-const { user, userData, loading } = useAuth();
+const { user, userData, loading, authError } = useAuth();
 
-  // 1. Si Firebase aún está revisando la sesión, mostramos un mensaje de carga
+  // Espera a que Supabase termine de verificar la sesión.
 if (loading) {
     return (
     <div style={{ display: 'flex', justifyContent: 'center', marginTop: '50px' }}>
@@ -17,6 +17,18 @@ if (loading) {
   // 2. Si NO hay usuario logueado, lo pateamos directo a la pantalla de Login ("/")
 if (!user) {
     return <Navigate to="/" replace />;
+}
+
+if (authError) {
+  return <div role="alert">No se pudo cargar tu perfil. Revisa la conexión con Supabase e inténtalo de nuevo.</div>;
+}
+
+if (!userData) {
+  return <div role="alert">La cuenta no tiene un perfil SIGAT. Contacta al administrador.</div>;
+}
+
+if (userData.must_change_password) {
+  return <Navigate to="/?change-password=required" replace />;
 }
 
   // 3. Si SÍ está logueado, pero su rol NO es "admin", también le negamos el acceso

@@ -50,7 +50,7 @@ return (
             maxLength={20}
             />
             <small style={styles.helperText}>
-            Este ID debe coincidir exactamente con el ID registrado en tu base de datos (Firestore).
+            Este ID debe coincidir exactamente con el ID registrado en tu base de datos.
             </small>
         </div>
 

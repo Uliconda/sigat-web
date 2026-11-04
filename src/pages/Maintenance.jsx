@@ -2,22 +2,21 @@
 import React, { useEffect, useState } from 'react';
 import Sidebar from "../components/Sidebar";
 import Swal from "sweetalert2";
-import { collection, doc, getDocs, updateDoc, addDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "../config/firebase";
-import { useAuth } from "../context/AuthContext"; // Importamos para saber quién hace el mantenimiento
+import { addHistorial, getEquipos, updateEquipo } from "../services/supabaseData";
+import { useAuth } from "../context/useAuth";
 
 const Maintenance = () => {
 const [maintenanceAlerts, setMaintenanceAlerts] = useState([]);
+const [currentTime] = useState(() => Date.now());
 const { userData } = useAuth(); // Extraemos los datos del usuario activo
 
 useEffect(() => {
 const fetchMaintenanceAlerts = async () => {
-    const querySnapshot = await getDocs(collection(db, "Equipos"));
-    const items = querySnapshot.docs.map((docSnap) => ({
-    id: docSnap.id,
-    ...docSnap.data(),
-    }));
-    setMaintenanceAlerts(items);
+    try {
+    setMaintenanceAlerts(await getEquipos());
+    } catch (error) {
+    console.error("Error al cargar equipos desde Supabase:", error);
+    }
 };
 
 fetchMaintenanceAlerts();
@@ -25,7 +24,7 @@ fetchMaintenanceAlerts();
 
 const formatDate = (value) => {
 if (!value) return "Sin revisión";
-const date = value.toDate ? value.toDate() : new Date(value);
+const date = new Date(value);
 return new Intl.DateTimeFormat("es-MX", {
     day: "2-digit",
     month: "2-digit",
@@ -40,8 +39,8 @@ if (!value) {
     return { status: "Pendiente", color: "#ffcc00", bgColor: "rgba(255, 204, 0, 0.1)" };
 }
 
-const date = value.toDate ? value.toDate() : new Date(value);
-const diffMs = Date.now() - date.getTime();
+const date = new Date(value);
+const diffMs = currentTime - date.getTime();
 const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
 if (diffDays > 360) {
@@ -75,16 +74,15 @@ const { value: observacion, isConfirmed } = await Swal.fire({
 if (!isConfirmed) return;
 
 try {
-    const docRef = doc(db, "Equipos", item.id);
-
     // 1. Actualizamos el equipo en la base de datos
-    await updateDoc(docRef, {
-    fecha_revision: serverTimestamp(),
+    const fechaRevision = new Date().toISOString();
+    await updateEquipo(item.id, {
+    fecha_revision: fechaRevision,
     observacion_revision: observacion,
     });
 
     // 2. Registramos en el Historial (Formato idéntico al Inventario para que salga en el Excel)
-    await addDoc(collection(db, "Historial"), {
+    await addHistorial({
     idEquipo: item.id,
     nombreEquipo: item.nombre || item.name || "Sin Nombre",
     accion: "MANTENIMIENTO",
@@ -97,7 +95,7 @@ try {
     setMaintenanceAlerts((prev) =>
     prev.map((row) =>
         row.id === item.id
-        ? { ...row, fecha_revision: new Date(), observacion_revision: observacion }
+        ? { ...row, fecha_revision: fechaRevision, observacion_revision: observacion }
         : row
     )
     );

@@ -1,8 +1,12 @@
 // src/pages/Inventory.jsx
 import { useState, useEffect } from "react";
-import { collection, onSnapshot, doc, updateDoc, addDoc, getDocs, query, orderBy, where } from "firebase/firestore";
-import { db } from "../config/firebase"; 
-import { useAuth } from "../context/AuthContext";
+import {
+  addHistorial,
+  getHistorial,
+  subscribeToEquipos,
+  updateEquipo,
+} from "../services/supabaseData";
+import { useAuth } from "../context/useAuth";
 import Sidebar from "../components/Sidebar";
 
 
@@ -25,13 +29,9 @@ export default function Inventory() {
   // 1. Cargar los equipos en tiempo real
   // ==========================================
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "Equipos"), (snapshot) => {
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+    const unsubscribe = subscribeToEquipos((data) => {
       setEquipos(data);
-    });
+    }, (error) => console.error("Error al cargar equipos desde Supabase:", error));
     return () => unsubscribe();
   }, []);
 
@@ -66,13 +66,12 @@ export default function Inventory() {
     if (!result.isConfirmed) return; 
 
     try {
-      const equipoRef = doc(db, "Equipos", equipo.id);
-      await updateDoc(equipoRef, {
+      await updateEquipo(equipo.id, {
         estado: nuevoEstado,
         usuarioActual: userData?.nombre || "Usuario Web", 
       });
 
-      await addDoc(collection(db, "Historial"), {
+      await addHistorial({
         idEquipo: equipo.id,
         nombreEquipo: equipo.nombre,
         accion: nuevoEstado === "Prestado" ? "PRÉSTAMO" : "DEVOLUCIÓN",
@@ -111,13 +110,12 @@ export default function Inventory() {
     if (!isConfirmed) return;
 
     try {
-      const equipoRef = doc(db, "Equipos", equipo.id);
-      await updateDoc(equipoRef, {
+      await updateEquipo(equipo.id, {
         estado: "Fuera de Servicio",
         usuarioActual: userData?.nombre || "Usuario Web", 
       });
 
-      await addDoc(collection(db, "Historial"), {
+      await addHistorial({
         idEquipo: equipo.id,
         nombreEquipo: equipo.nombre,
         accion: "BAJA",
@@ -156,13 +154,12 @@ export default function Inventory() {
     if (!isConfirmed) return;
 
     try {
-      const equipoRef = doc(db, "Equipos", equipo.id);
-      await updateDoc(equipoRef, {
+      await updateEquipo(equipo.id, {
         estado: "Disponible",
         usuarioActual: userData?.nombre || "Usuario Web", 
       }); 
       
-      await addDoc(collection(db, "Historial"), {
+      await addHistorial({
         idEquipo: equipo.id,
         nombreEquipo: equipo.nombre,
         accion: "REACTIVACIÓN",
@@ -289,21 +286,19 @@ export default function Inventory() {
   // ==========================================
   const exportHistoryToExcel = async () => {
     try {
-      const historialRef = collection(db, "Historial");
-      let q;
       let nombreArchivo = `Reporte_SIGAT_Completo_${new Date().toLocaleDateString('es-MX').replace(/\//g, '-')}.xlsx`;
+      let start;
+      let end;
 
-      if (reportType === "all") {
-        q = query(historialRef, orderBy("fecha", "desc"));
-      } else {
+      if (reportType !== "all") {
         if (!startDate || !endDate) {
           Swal.fire("Faltan datos", "Por favor selecciona la fecha de inicio y fin para generar el reporte.", "warning");
           return;
         }
 
-        const start = new Date(startDate);
+        start = new Date(startDate);
         start.setHours(0, 0, 0, 0); 
-        const end = new Date(endDate);
+        end = new Date(endDate);
         end.setHours(23, 59, 59, 999); 
 
         if (start > end) {
@@ -311,24 +306,22 @@ export default function Inventory() {
           return;
         }
 
-        q = query(historialRef, where("fecha", ">=", start), where("fecha", "<=", end), orderBy("fecha", "desc"));
         nombreArchivo = `Reporte_SIGAT_${startDate}_al_${endDate}.xlsx`;
       }
 
       Swal.fire({ title: 'Generando...', text: 'Obteniendo datos de la nube', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
 
-      const snapshot = await getDocs(q);
+      const historial = await getHistorial({ start, end });
 
-      if (snapshot.empty) {
+      if (historial.length === 0) {
         Swal.fire("Sin datos", "No hay movimientos registrados en este rango de fechas.", "info");
         return;
       }
 
-      const datosHistorial = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        
-        const fechaLegible = data.fecha 
-          ? (typeof data.fecha.toDate === 'function' ? data.fecha.toDate().toLocaleString("es-MX") : new Date(data.fecha).toLocaleString("es-MX")) 
+      const datosHistorial = historial.map((data) => {
+
+        const fechaLegible = data.fecha
+          ? new Date(data.fecha).toLocaleString("es-MX")
           : "Sin fecha";
 
         const equipoInfo = equipos.find(e => e.id === data.idEquipo);

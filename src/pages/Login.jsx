@@ -1,17 +1,51 @@
 // src/pages/Login.jsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../config/firebase";
+import { supabase } from "../config/supabase";
+import { getProfile } from "../services/supabaseData";
+import { useAuth } from "../context/useAuth";
 
 export default function Login() {
 const [email, setEmail] = useState("");
 const [password, setPassword] = useState("");
 const [error, setError] = useState("");
 const [loading, setLoading] = useState(false);
+const [recovery, setRecovery] = useState(false);
+const [mustChangePassword, setMustChangePassword] = useState(false);
+const [resetMode, setResetMode] = useState(false);
+const [resetSent, setResetSent] = useState(false);
+const [newPassword, setNewPassword] = useState("");
+const [confirmNewPassword, setConfirmNewPassword] = useState("");
 
 const navigate = useNavigate(); // Herramienta para cambiar de página
+const { refreshProfile } = useAuth();
+
+useEffect(() => {
+    let active = true;
+    supabase.auth.getSession().then(async ({ data, error: sessionError }) => {
+        if (!active || sessionError || !data.session?.user) return;
+        try {
+            const profile = await getProfile(data.session.user.id);
+            if (active && profile?.must_change_password) setMustChangePassword(true);
+        } catch (profileError) {
+            console.error("Error al cargar el perfil para cambiar contraseña:", profileError);
+            if (active) setError("No se pudo verificar el perfil de esta cuenta.");
+        }
+    }).catch((sessionError) => {
+        if (active) {
+            console.error("Error al verificar la sesión:", sessionError);
+            setError("No se pudo verificar la sesión de Supabase.");
+        }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "PASSWORD_RECOVERY") setRecovery(true);
+    });
+    return () => {
+        active = false;
+        subscription.unsubscribe();
+    };
+}, []);
 
 const handleLogin = async (e) => {
 e.preventDefault(); // Evita que la página se recargue al enviar el formulario
@@ -19,48 +53,173 @@ setError("");
 setLoading(true);
 
 try {
-    // 1. Intentamos iniciar sesión con Firebase Auth
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
+    const { data, error: loginError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+    });
+    if (loginError) throw loginError;
 
-    // 2. Buscamos el documento del usuario en Firestore para ver su rol
-    const docRef = doc(db, "Usuarios", user.uid);
-    const docSnap = await getDoc(docRef);
-
-    // 3. Verificamos que el documento exista y leemos sus datos
-    if (docSnap.exists()) {
-    const userData = docSnap.data();
-
-    // 4. Dejamos entrar tanto al admin como al superadmin
-    if (userData.rol === "admin" || userData.rol === "superadmin") {
+    const profile = await getProfile(data.user.id);
+    if (profile?.must_change_password) {
+        setMustChangePassword(true);
+        return;
+    }
+    if (profile?.rol === "admin" || profile?.rol === "superadmin") {
         navigate("/dashboard");
     } else {
-        // Existe, pero es un usuario normal. Le cerramos la puerta.
-        await signOut(auth);
-        setError("Acceso denegado: Esta plataforma es solo para administradores.");
-    }
-    } else {
-    // El usuario está en Auth pero no en la colección de Firestore
-    await signOut(auth);
-    setError("Error: El usuario no tiene un perfil en la base de datos.");
+        await supabase.auth.signOut();
+        setError(profile
+            ? "Acceso denegado: Esta plataforma es solo para administradores."
+            : "La cuenta no tiene un perfil SIGAT. Contacta al administrador.");
     }
 } catch (err) {
     console.error("Error en login:", err);
-    setError("Correo o contraseña incorrectos. Intenta de nuevo.");
+    setError("No se pudo iniciar sesión. Verifica tus datos y que Supabase esté configurado.");
 } finally {
     setLoading(false);
 }
+};
+
+const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.origin,
+        });
+        if (resetError) throw resetError;
+        setResetSent(true);
+    } catch (err) {
+        console.error("Error al solicitar restablecimiento:", err);
+        setError("No se pudo enviar el correo de restablecimiento.");
+    } finally {
+        setLoading(false);
+    }
+};
+
+const handleNewPassword = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+        if (newPassword !== confirmNewPassword) {
+            setError("Las contraseñas no coinciden.");
+            return;
+        }
+        if (mustChangePassword) {
+            const { error: changeError } = await supabase.functions.invoke("manage-users", {
+                body: { action: "set-initial-password", newPassword },
+            });
+            if (changeError) throw changeError;
+            setMustChangePassword(false);
+            await refreshProfile();
+        } else {
+            const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+            if (updateError) throw updateError;
+        }
+        setRecovery(false);
+        setNewPassword("");
+        setConfirmNewPassword("");
+        navigate("/dashboard");
+    } catch (err) {
+        console.error("Error al actualizar la contraseña:", err);
+        setError("No se pudo actualizar la contraseña. Solicita un nuevo enlace.");
+    } finally {
+        setLoading(false);
+    }
 };
 
 return (
 <div style={styles.container}>
     <div style={styles.card}>
     <h2 style={styles.title}>SIGAT Admin</h2>
-    <p style={styles.subtitle}>Panel de Control</p>
+    <p style={styles.subtitle}>
+        {mustChangePassword || recovery
+            ? "Establecer nueva contraseña"
+            : resetMode
+              ? "Restablecer contraseña"
+              : "Panel de Control"}
+    </p>
 
-    {/* Mostramos el mensaje de error si existe */}
+    {mustChangePassword && (
+        <div role="status" style={styles.successBox}>
+            Esta contraseña temporal debe cambiarse antes de continuar. Usa una contraseña nueva de al menos 12 caracteres.
+        </div>
+    )}
+
     {error && <div style={styles.errorBox}>{error}</div>}
 
+    {resetSent && (
+        <div role="status" style={styles.successBox}>
+            Si el correo está registrado, Supabase aceptó la solicitud. Revisa la bandeja de entrada y spam.
+            En el modo de prueba de Resend, el destinatario debe ser el correo verificado en Resend.
+        </div>
+    )}
+
+    {recovery || mustChangePassword ? (
+    <form onSubmit={handleNewPassword} style={styles.form}>
+        <div style={styles.inputGroup}>
+        <label>Nueva contraseña</label>
+        <input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            minLength={12}
+            required
+            style={styles.input}
+            autoComplete="new-password"
+        />
+        </div>
+        <div style={styles.inputGroup}>
+        <label>Confirmar nueva contraseña</label>
+        <input
+            type="password"
+            value={confirmNewPassword}
+            onChange={(e) => setConfirmNewPassword(e.target.value)}
+            minLength={12}
+            required
+            style={styles.input}
+            autoComplete="new-password"
+        />
+        </div>
+        <button type="submit" disabled={loading} style={styles.button}>
+        {loading ? "Guardando..." : "Guardar contraseña"}
+        </button>
+    </form>
+    ) : resetMode ? (
+    <form onSubmit={handleResetPassword} style={styles.form}>
+        <div style={styles.inputGroup}>
+        <label>Correo Electrónico</label>
+        <input
+            type="email"
+            value={email}
+            onChange={(e) => {
+                setEmail(e.target.value);
+                setResetSent(false);
+                setError("");
+            }}
+            required
+            style={styles.input}
+            autoComplete="email"
+        />
+        </div>
+        <button type="submit" disabled={loading} style={styles.button}>
+        {loading ? "Solicitando..." : resetSent ? "Reenviar enlace" : "Enviar enlace"}
+        </button>
+        <button
+            type="button"
+            onClick={() => {
+                setResetMode(false);
+                setResetSent(false);
+                setError("");
+            }}
+            style={styles.resetButton}
+        >
+            Volver al inicio de sesión
+        </button>
+    </form>
+    ) : (
     <form onSubmit={handleLogin} style={styles.form}>
         <div style={styles.inputGroup}>
         <label>Correo Electrónico</label>
@@ -90,6 +249,21 @@ return (
         {loading ? "Verificando..." : "Ingresar"}
         </button>
     </form>
+    )}
+    {!recovery && !mustChangePassword && !resetMode && (
+        <button
+            type="button"
+            onClick={() => {
+                setResetMode(true);
+                setResetSent(false);
+                setError("");
+            }}
+            disabled={loading || !email}
+            style={styles.resetButton}
+        >
+            Restablecer contraseña
+        </button>
+    )}
     </div>
 </div>
 );
@@ -149,9 +323,25 @@ cursor: "pointer",
 fontWeight: "bold",
 marginTop: "10px",
 },
+resetButton: {
+background: "none",
+border: "none",
+color: "#ff6600",
+cursor: "pointer",
+marginTop: "12px",
+},
 errorBox: {
 backgroundColor: "#ffe6e6",
 color: "#d9534f",
+padding: "10px",
+borderRadius: "5px",
+marginBottom: "15px",
+textAlign: "center",
+fontSize: "14px",
+},
+successBox: {
+backgroundColor: "#e8f5e9",
+color: "#256029",
 padding: "10px",
 borderRadius: "5px",
 marginBottom: "15px",

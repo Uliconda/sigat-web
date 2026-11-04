@@ -1,8 +1,12 @@
 // src/pages/Dashboard.jsx
 import { useState, useEffect, useContext } from "react"; 
-import { collection, onSnapshot, doc, updateDoc, addDoc } from "firebase/firestore";
-import { db } from "../config/firebase";
-import { useAuth } from "../context/AuthContext";
+import {
+  addHistorial,
+  subscribeToEquipos,
+  subscribeToHistorial,
+  updateEquipo,
+} from "../services/supabaseData";
+import { useAuth } from "../context/useAuth";
 import { ThemeContext } from "../context/ThemeContext"; 
 import Sidebar from "../components/Sidebar";
 import emailjs from '@emailjs/browser';
@@ -33,8 +37,7 @@ export default function Dashboard() {
 
 // 1. ESCUCHA DE INVENTARIO (Equipos)
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "Equipos"), (snapshot) => {
-      const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const unsubscribe = subscribeToEquipos((docs) => {
       
       // Filtramos para quedarnos ÚNICAMENTE con los equipos reales
       const equiposReales = docs.filter(item => 
@@ -68,24 +71,23 @@ export default function Dashboard() {
       ]);
 
       const catCounts = {};
-      equiposReales.forEach(doc => {
-        const cat = doc.categoria || "General"; 
+      equiposReales.forEach(equipo => {
+        const cat = equipo.categoria || "General";
         catCounts[cat] = (catCounts[cat] || 0) + 1;
       });
       setCategoryData(Object.keys(catCounts).map(key => ({ categoria: key, cantidad: catCounts[key] })));
-    });
+    }, (error) => console.error("Error al cargar equipos desde Supabase:", error));
 
     return () => unsubscribe();
   }, []);
 
   // 2. ESCUCHA DE ESTADÍSTICAS (Historial)
   useEffect(() => {
-    const unsubscribe = onSnapshot(collection(db, "Historial"), (snapshot) => {
+    const unsubscribe = subscribeToHistorial((historial) => {
       const conteoEquipos = {};
       const conteoHoras = {};
 
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
+      historial.forEach(data => {
         const esPrestamo = data.accion && (
             data.accion.toLowerCase().includes("préstamo") || 
             data.accion.toLowerCase().includes("prestamo")
@@ -96,12 +98,12 @@ export default function Dashboard() {
           conteoEquipos[nombre] = (conteoEquipos[nombre] || 0) + 1;
 
           if (data.fecha) {
-            const dateObj = typeof data.fecha.toDate === 'function' ? data.fecha.toDate() : new Date(data.fecha);
+            const dateObj = new Date(data.fecha);
             const hora = `${dateObj.getHours()}:00`;
             conteoHoras[hora] = (conteoHoras[hora] || 0) + 1;
           }
         }
-      });
+      }, (error) => console.error("Error al cargar historial desde Supabase:", error));
 
       const top = Object.keys(conteoEquipos)
         .map(key => ({ equipo: key, prestamos: conteoEquipos[key] }))
@@ -138,7 +140,7 @@ export default function Dashboard() {
           continue; // Si está en la lista, saltamos este equipo y no enviamos correo
         }
 
-        // Asume que guardas la fecha del préstamo como "fecha_prestamo" y que es un timestamp de Firebase o string
+        // La fecha puede venir como una cadena ISO o una fecha serializada.
         if (item.estado?.toLowerCase() === "prestado" && item.fecha_prestamo && !item.alerta_enviada) {
           
           const fechaPrestamo = typeof item.fecha_prestamo.toDate === 'function' 
@@ -171,14 +173,13 @@ export default function Dashboard() {
               );
 
               // Actualizamos el equipo para marcar la alerta y cambiar estado a "No responde" si lo deseas
-              const equipoRef = doc(db, "Equipos", item.id);
-              await updateDoc(equipoRef, { 
+              await updateEquipo(item.id, {
                 alerta_enviada: true,
                 estado: "No responde" // Lo marcamos como falta automáticamente
               });
 
               // Guardamos en historial
-              await addDoc(collection(db, "Historial"), {
+              await addHistorial({
                 idEquipo: item.id,
                 nombreEquipo: item.nombre,
                 accion: "FALTA AUTOMÁTICA (48 Hrs)",
@@ -214,8 +215,7 @@ export default function Dashboard() {
     try {
       Swal.fire({ title: 'Procesando...', text: 'Actualizando estado y enviando notificaciones', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
 
-      const equipoRef = doc(db, "Equipos", item.id);
-      await updateDoc(equipoRef, { estado: nuevoEstado, alerta_enviada: !tieneFalta }); // Actualizamos bandera de alerta
+      await updateEquipo(item.id, { estado: nuevoEstado, alerta_enviada: !tieneFalta }); // Actualizamos bandera de alerta
 
       if (!tieneFalta) {
         let matricula = "desconocido";
@@ -225,12 +225,12 @@ export default function Dashboard() {
 
         const correoAlumno = `${matricula}@cesba-queretaro.edu.mx`;
 
-        await addDoc(collection(db, "Historial"), { idEquipo: item.id, nombreEquipo: item.nombre, accion: "MARCA DE FALTA", fecha: new Date(), admin: userData?.nombre || "Admin", observaciones: `Correo enviado a: ${correoAlumno}` });
+        await addHistorial({ idEquipo: item.id, nombreEquipo: item.nombre, accion: "MARCA DE FALTA", fecha: new Date(), admin: userData?.nombre || "Admin", observaciones: `Correo enviado a: ${correoAlumno}` });
         await emailjs.send('service_mjwigqc', 'template_2igqgus', { correo_destino: correoAlumno, nombre_alumno: item.poseedor_actual || item.alumno_nombre || 'Alumno', nombre_equipo: item.nombre, id_equipo: item.id_qr || item.id }, 'ghx5YPipRyYK0oPBG');
 
         Swal.fire({ title: '¡Falta marcada!', text: `Correo enviado a ${correoAlumno}`, icon: 'success', timer: 3000, showConfirmButton: false });
       } else {
-        await addDoc(collection(db, "Historial"), { idEquipo: item.id, nombreEquipo: item.nombre, accion: "FALTA RETIRADA", fecha: new Date(), admin: userData?.nombre || "Admin" });
+        await addHistorial({ idEquipo: item.id, nombreEquipo: item.nombre, accion: "FALTA RETIRADA", fecha: new Date(), admin: userData?.nombre || "Admin" });
         Swal.fire({ title: '¡Falta retirada!', text: 'El equipo ha vuelto a Prestado.', icon: 'success', timer: 2500, showConfirmButton: false });
       }
     } catch (error) {
@@ -275,7 +275,7 @@ export default function Dashboard() {
         'ghx5YPipRyYK0oPBG'
       );
 
-      await addDoc(collection(db, "Historial"), {
+      await addHistorial({
         idEquipo: item.id,
         nombreEquipo: item.nombre,
         accion: "REENVÍO DE CORREO",

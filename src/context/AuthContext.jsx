@@ -1,60 +1,101 @@
-// src/context/AuthContext.jsx
-import { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
-import { auth, db } from "../config/firebase";
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "../config/supabase";
+import { getProfile } from "../services/supabaseData";
+import { AuthContext } from "./authContext";
 
-// 1. Creamos el contexto
-const AuthContext = createContext();
-
-// 2. Creamos el Provider (el componente que envolverá nuestra app)
 export function AuthProvider({ children }) {
-const [user, setUser] = useState(null);
-const [userData, setUserData] = useState(null);
-const [loading, setLoading] = useState(true); // Para mostrar una carga mientras verificamos la sesión
+  const [user, setUser] = useState(null);
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
 
-useEffect(() => {
-    // Escuchamos los cambios de sesión de Firebase
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-    setUser(currentUser);
-
-    if (currentUser) {
-        // Si hay alguien logueado, buscamos su rol en Firestore
-        try {
-            const docRef = doc(db, "Usuarios", currentUser.uid);
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-            setUserData(docSnap.data()); // Guardamos su nombre, email y ROL
-        } else {
-            console.log("El usuario no tiene un documento en la colección 'Usuarios'");
-            setUserData(null);
-        }
-        } catch (error) {
-            console.error("Error obteniendo datos del usuario:", error);
-        }
-    } else {
-        // Si cierra sesión, limpiamos los datos
-        setUserData(null);
+  const refreshProfile = useCallback(async () => {
+    if (!user) return null;
+    setLoading(true);
+    try {
+      const profile = await getProfile(user.id);
+      setUserData(profile);
+      setAuthError(profile ? null : new Error("La cuenta no tiene un perfil SIGAT."));
+      return profile;
+    } catch (error) {
+      setAuthError(error);
+      throw error;
+    } finally {
+      setLoading(false);
     }
+  }, [user]);
 
-      setLoading(false); // Ya terminamos de verificar
+  useEffect(() => {
+    let active = true;
+    let profileRequest = 0;
+
+    const applySession = (currentUser) => {
+      setUser(currentUser);
+      setUserData(null);
+      setAuthError(null);
+
+      if (!currentUser) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      const requestId = ++profileRequest;
+      setTimeout(async () => {
+        try {
+          const profile = await getProfile(currentUser.id);
+          if (!active || requestId !== profileRequest) return;
+          setUserData(profile);
+          if (!profile) {
+            setAuthError(new Error("La cuenta no tiene un perfil SIGAT."));
+          }
+        } catch (error) {
+          if (!active || requestId !== profileRequest) return;
+          console.error("Error al cargar el perfil de Supabase:", error);
+          setAuthError(error);
+        } finally {
+          if (active && requestId === profileRequest) setLoading(false);
+        }
+      }, 0);
+    };
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return;
+      if (error) {
+        setAuthError(error);
+        setLoading(false);
+        return;
+      }
+      applySession(data.session?.user ?? null);
+    }).catch((error) => {
+      if (!active) return;
+      console.error("Error al verificar la sesión de Supabase:", error);
+      setAuthError(error);
+      setLoading(false);
     });
 
-    return () => unsubscribe();
-}, []);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) =>
+      applySession(session?.user ?? null)
+    );
 
-  // 3. Compartimos estos valores con toda la aplicación
-return (
-    <AuthContext.Provider value={{ user, userData, loading }}>
-    {!loading && children} 
-      {/* El !loading evita que la app parpadee o muestre cosas sin antes saber si hay sesión */}
+    return () => {
+      active = false;
+      profileRequest += 1;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  return (
+    <AuthContext.Provider value={{
+      user,
+      userData,
+      loading,
+      authError,
+      refreshProfile,
+    }}>
+      {children}
     </AuthContext.Provider>
-);
+  );
 }
-
-// 4. Creamos un "Hook" personalizado para que sea facilísimo usarlo en otras pantallas
-export const useAuth = () =>  { 
-return useContext(AuthContext);
-};
-

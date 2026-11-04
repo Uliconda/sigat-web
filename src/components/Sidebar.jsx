@@ -1,9 +1,8 @@
 // src/components/Sidebar.jsx
 import { useContext, useEffect, useState } from "react"; 
 import { useNavigate, useLocation } from "react-router-dom";
-import { signOut } from "firebase/auth";
-import { auth, db } from "../config/firebase"; // Asegúrate de importar db
-import { collection, onSnapshot } from "firebase/firestore"; // Importamos para leer en tiempo real
+import { supabase } from "../config/supabase";
+import { subscribeToEquipos } from "../services/supabaseData";
 import { ThemeContext } from "../context/ThemeContext"; 
 import logo from '../assets/assets_buho.png'; 
 
@@ -17,11 +16,10 @@ const [urgentCount, setUrgentCount] = useState(0);
 
 // Escuchar en tiempo real los equipos para calcular mantenimientos urgentes
 useEffect(() => {
-const unsubscribe = onSnapshot(collection(db, "Equipos"), (snapshot) => {
+const unsubscribe = subscribeToEquipos((equipos) => {
     let count = 0;
-    snapshot.forEach((doc) => {
-    const data = doc.data();
-    const dateVal = data.fecha_revision || data.lastCheck;
+    equipos.forEach((equipo) => {
+    const dateVal = equipo.fecha_revision || equipo.lastCheck;
     
     if (dateVal) {
         const date = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
@@ -35,7 +33,7 @@ const unsubscribe = onSnapshot(collection(db, "Equipos"), (snapshot) => {
     }
     });
     setUrgentCount(count);
-});
+}, (error) => console.error("Error al cargar equipos para mantenimiento:", error));
 
 return () => unsubscribe();
 }, []);
@@ -47,7 +45,14 @@ const menuItems = [
 { name: "Mantenimiento", path: "/mantenimiento", icon: "🛠️" },        
 ];
 
-const handleLogout = () => signOut(auth).then(() => navigate("/"));
+const handleLogout = async () => {
+const { error } = await supabase.auth.signOut();
+if (error) {
+    console.error("Error al cerrar sesión:", error);
+    return;
+}
+navigate("/");
+};
 
 const getActiveBgColor = (path) => {
 if (location.pathname !== path) return "transparent";

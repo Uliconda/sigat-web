@@ -1,24 +1,13 @@
 // src/pages/Users.jsx
 import { useState, useEffect } from "react";
-import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
-// IMPORTANTE: Agregamos sendPasswordResetEmail aquí
-import { createUserWithEmailAndPassword, getAuth, signOut, sendPasswordResetEmail } from "firebase/auth";
-import { initializeApp } from "firebase/app";
-import { db, auth } from "../config/firebase"; 
+import { supabase } from "../config/supabase";
+import {
+  subscribeToProfiles,
+  updateProfile,
+} from "../services/supabaseData";
 import Sidebar from "../components/Sidebar";
 import Swal from "sweetalert2";
-import { useAuth } from "../context/AuthContext";
-
-const firebaseConfig = {
-apiKey: "AIzaSyCb43aVyAPrDuYLpqBEbNgwPFaqNMilFus",
-authDomain: "sigat-627cd.firebaseapp.com",
-projectId: "sigat-627cd",
-storageBucket: "sigat-627cd.firebasestorage.app",
-messagingSenderId: "729844215540",
-appId: "1:729844215540:web:060c9179bd15a8ec0bb8a1"
-};
-const secondaryApp = initializeApp(firebaseConfig, "Secondary");
-const secondaryAuth = getAuth(secondaryApp);
+import { useAuth } from "../context/useAuth";
 
 export default function Users() {
 // EXTRAEMOS user (para el ID) Y userData (para el rol)
@@ -34,8 +23,8 @@ rol: "usuario"
 });
 
 useEffect(() => {
-const unsubscribe = onSnapshot(collection(db, "Usuarios"), (snapshot) => {
-    setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+const unsubscribe = subscribeToProfiles(setUsers, (error) => {
+    console.error("Error al cargar usuarios desde Supabase:", error);
 });
 return () => unsubscribe();
 }, []);
@@ -44,21 +33,16 @@ const handleCreateUser = async (e) => {
 e.preventDefault();
 setLoading(true);
 try {
-    const userCredential = await createUserWithEmailAndPassword(
-    secondaryAuth,
-    formData.email,
-    formData.password
-    );
-    const newUserId = userCredential.user.uid;
-
-    await setDoc(doc(db, "Usuarios", newUserId), {
-    nombre: formData.nombre,
-    email: formData.email,
-    rol: formData.rol,
-    createdAt: new Date().toISOString()
+    const { error } = await supabase.functions.invoke("manage-users", {
+      body: {
+        action: "create",
+        email: formData.email,
+        password: formData.password,
+        nombre: formData.nombre,
+        rol: formData.rol,
+      },
     });
-
-    await signOut(secondaryAuth);
+    if (error) throw error;
 
     Swal.fire({
     icon: 'success',
@@ -149,15 +133,17 @@ if (formValues) {
     }
 
     try {
-    const userRef = doc(db, "Usuarios", usuario.id);
-    await updateDoc(userRef, {
+    await updateProfile(usuario.id, {
         nombre: formValues.nombre,
         rol: formValues.rol
     });
 
     // ENVIAR CORREO SI EL CHECKBOX ESTÁ MARCADO
     if (formValues.resetPassword) {
-        await sendPasswordResetEmail(auth, usuario.email);
+        const { error } = await supabase.auth.resetPasswordForEmail(usuario.email, {
+            redirectTo: window.location.origin,
+        });
+        if (error) throw error;
         Swal.fire({ 
             icon: 'success', 
             title: '¡Actualizado!', 
@@ -212,7 +198,10 @@ const result = await Swal.fire({
 
 if (result.isConfirmed) {
     try {
-    await deleteDoc(doc(db, "Usuarios", targetUser.id));
+    const { error } = await supabase.functions.invoke("manage-users", {
+        body: { action: "delete", userId: targetUser.id },
+    });
+    if (error) throw error;
     Swal.fire('¡Eliminado!', 'El usuario ha sido removido.', 'success');
     } catch (error) {
     console.error("Error al eliminar usuario:", error);
@@ -307,7 +296,7 @@ return (
             <div style={styles.inputGroup}>
             <label>Contraseña Provisional</label>
             <input
-                type="password" required style={styles.input}
+                type="password" required minLength={8} style={styles.input}
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             />
@@ -320,7 +309,9 @@ return (
                 onChange={(e) => setFormData({ ...formData, rol: e.target.value })}
             >
                 <option value="usuario">Usuario Normal</option>
+                {userData?.rol === "superadmin" && (
                 <option value="admin">Administrador</option>
+                )}
                 {userData?.rol === "superadmin" && (
                 <option value="superadmin">Super Administrador</option>
                 )}
