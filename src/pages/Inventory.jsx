@@ -15,6 +15,7 @@ import { descargarExcel } from "../utils/excel";
 import { escapeHtml } from "../utils/html";
 import Swal from 'sweetalert2';
 import { mensajeDeError } from "../utils/errores";
+import { ESTADOS, esEstado } from "../constants/estados";
 import "./Inventory.css";
 
 export default function Inventory() {
@@ -51,8 +52,8 @@ export default function Inventory() {
   // 2. FUNCIÓN PARA CAMBIAR ESTADO NORMAL
   // ==========================================
   const handleToggleStatus = async (equipo) => {
-    const esDisponible = equipo.estado?.toLowerCase() === "disponible";
-    const nuevoEstado = esDisponible ? "Prestado" : "Disponible";
+    const esDisponible = esEstado(equipo.estado, ESTADOS.DISPONIBLE);
+    const nuevoEstado = esDisponible ? ESTADOS.PRESTADO : ESTADOS.DISPONIBLE;
 
     const result = await Swal.fire({
       title: '¿Confirmar cambio?',
@@ -76,7 +77,7 @@ export default function Inventory() {
       await addHistorial({
         idEquipo: equipo.id,
         nombreEquipo: equipo.nombre,
-        accion: nuevoEstado === "Prestado" ? "PRÉSTAMO" : "DEVOLUCIÓN",
+        accion: nuevoEstado === ESTADOS.PRESTADO ? "PRÉSTAMO" : "DEVOLUCIÓN",
         fecha: new Date(),
         admin: userData?.nombre || "Usuario Desconocido",
         observaciones: "Cambio de estado manual desde la Web",
@@ -113,7 +114,7 @@ export default function Inventory() {
 
     try {
       await updateEquipo(equipo.id, {
-        estado: "Fuera de Servicio",
+        estado: ESTADOS.FUERA_DE_SERVICIO,
         usuarioActual: userData?.nombre || "Usuario Web", 
       });
 
@@ -157,7 +158,7 @@ export default function Inventory() {
 
     try {
       await updateEquipo(equipo.id, {
-        estado: "Disponible",
+        estado: ESTADOS.DISPONIBLE,
         usuarioActual: userData?.nombre || "Usuario Web", 
       }); 
       
@@ -661,7 +662,7 @@ export default function Inventory() {
 
                   <td className="centrado">
                     <div className="inventario-fila-acciones">
-                      {item.estado?.toLowerCase() !== "fuera de servicio" ? (
+                      {!esEstado(item.estado, ESTADOS.FUERA_DE_SERVICIO) ? (
                         <>
                           <button type="button" onClick={() => handleToggleStatus(item)} className="inventario-accion" title="Cambiar estado (Prestar/Devolver)">🔄 Estado</button>
                           <button type="button" onClick={() => handleDiscardEquipment(item)} className="inventario-accion inventario-accion--baja" title="Marcar como descompuesto o fuera de servicio">🚫 Baja</button>
@@ -687,9 +688,8 @@ export default function Inventory() {
 
 // Clase CSS según el estado del equipo (los colores están en Inventory.css).
 function claseEstado(estado) {
-  const valor = (estado ?? "").toLowerCase();
-  if (valor === "disponible") return "disponible";
-  if (valor === "prestado" || valor === "sin entregar") return "prestado";
-  if (valor === "no responde") return "falta";
+  if (esEstado(estado, ESTADOS.DISPONIBLE)) return "disponible";
+  if (esEstado(estado, ESTADOS.PRESTADO, ESTADOS.SIN_ENTREGAR)) return "prestado";
+  if (esEstado(estado, ESTADOS.NO_RESPONDE)) return "falta";
   return "otro";
 }

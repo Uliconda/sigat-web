@@ -13,6 +13,7 @@ import { ThemeContext } from "../context/theme";
 import Sidebar from "../components/Sidebar";
 import Swal from 'sweetalert2'; 
 import { mensajeDeError } from "../utils/errores";
+import { ESTADOS, esEstado, estaFuera } from "../constants/estados";
 import "./Dashboard.css";
 import { 
   PieChart, Pie, Cell, 
@@ -47,18 +48,18 @@ export default function Dashboard() {
         !item.isTemplate && item.nombre?.toLowerCase() !== "plantilla sistema"
       );
       
-      const disponibles = equiposReales.filter(i => i.estado?.toLowerCase() === "disponible").length;
+      const disponibles = equiposReales.filter(i => esEstado(i.estado, ESTADOS.DISPONIBLE)).length;
       const prestados = equiposReales.filter(i => 
-        ["prestado", "sin entregar"].includes(i.estado?.toLowerCase())
+        esEstado(i.estado, ESTADOS.PRESTADO, ESTADOS.SIN_ENTREGAR)
       ).length;
-      const fueraDeServicio = equiposReales.filter(i => i.estado?.toLowerCase() === "fuera de servicio").length;
-      const faltas = equiposReales.filter(i => i.estado?.toLowerCase() === "no responde").length;
+      const fueraDeServicio = equiposReales.filter(i => esEstado(i.estado, ESTADOS.FUERA_DE_SERVICIO)).length;
+      const faltas = equiposReales.filter(i => esEstado(i.estado, ESTADOS.NO_RESPONDE)).length;
       
       setMetrics({ total: equiposReales.length, disponibles, prestados, fueraDeServicio, faltas });
 
       // 👇 AQUÍ ESTÁ EL CAMBIO: Filtramos por estado y EXCLUIMOS a los ADMINISTRATIVOS
       const equiposFuera = equiposReales.filter(i => {
-        const esPrestado = ["prestado", "sin entregar", "no responde"].includes(i.estado?.toLowerCase());
+        const esPrestado = estaFuera(i.estado);
         const noEsAdministrativo = i.categoria?.toUpperCase() !== "ADMINISTRATIVOS";
         
         return esPrestado && noEsAdministrativo; 
@@ -128,7 +129,7 @@ export default function Dashboard() {
 
   // 3. FUNCIÓN MANEJO DE FALTAS MANUALES
   const handleToggleFalta = async (item) => {
-    const tieneFalta = item.estado?.toLowerCase() === "no responde";
+    const tieneFalta = esEstado(item.estado, ESTADOS.NO_RESPONDE);
     
     const swalConfig = tieneFalta 
       ? { title: '¿Retirar Falta?', text: `Se quitará la marca de moroso a "${item.nombre}" y volverá a estar Prestado.`, icon: 'info', confirmButtonColor: '#28a745' }
@@ -148,7 +149,7 @@ export default function Dashboard() {
       } else {
         // alerta_enviada sigue en true: el aviso ya se envió y la revisión
         // automática no debe volver a marcar este préstamo.
-        await updateEquipo(item.id, { estado: "Prestado", alerta_enviada: true });
+        await updateEquipo(item.id, { estado: ESTADOS.PRESTADO, alerta_enviada: true });
         await addHistorial({ idEquipo: item.id, nombreEquipo: item.nombre, accion: "FALTA RETIRADA", fecha: new Date(), admin: userData?.nombre || "Admin" });
         Swal.fire({ title: '¡Falta retirada!', text: 'El equipo ha vuelto a Prestado.', icon: 'success', timer: 2500, showConfirmButton: false });
       }
@@ -314,7 +315,7 @@ export default function Dashboard() {
               </thead>
               <tbody>
                 {prestadosList.map(item => {
-                  const tieneFalta = item.estado?.toLowerCase() === 'no responde';
+                  const tieneFalta = esEstado(item.estado, ESTADOS.NO_RESPONDE);
                   return (
                     <tr key={item.id}>
                       <td>{item.id_qr || item.id}</td>
