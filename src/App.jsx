@@ -1,5 +1,5 @@
 // src/App.jsx
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 
 // Importamos nuestras pantallas y componentes principales
 import Login from "./pages/Login";
@@ -11,20 +11,6 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import Maintenance from "./pages/Maintenance";
 
 
-// Pantallas temporales (placeholders) para que el Sidebar no de error al hacer clic
-const UsersPlaceholder = () => (
-  <div style={{ display: 'flex' }}>
-    <div style={{ width: '250px' }}><aside /></div> {/* Espacio para el Sidebar */}
-    
-  </div>
-);
-
-const QrPlaceholder = () => (
-  <div style={{ display: 'flex' }}>
-    <div style={{ width: '250px' }}><aside /></div>
-    
-  </div>
-);
 
 function App() {
   return (
@@ -84,7 +70,9 @@ function App() {
             </ProtectedRoute>
           } 
         />
-        
+
+        {/* Cualquier otra URL vuelve al inicio. */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

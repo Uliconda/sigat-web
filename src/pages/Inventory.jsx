@@ -10,7 +10,9 @@ import { useAuth } from "../context/useAuth";
 import Sidebar from "../components/Sidebar";
 
 
-import * as XLSX from "xlsx";
+import QRCode from "qrcode";
+import { descargarExcel } from "../utils/excel";
+import { escapeHtml } from "../utils/html";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable"; 
 import Swal from 'sweetalert2';
@@ -179,11 +181,21 @@ export default function Inventory() {
   // 5. FUNCIÓN PARA GENERAR QR, DESCARGAR E IMPRIMIR
   // ==========================================
   const handleGenerateQR = async (equipo) => {
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${equipo.id}`;
+    // El QR se genera en el navegador: no depende de servicios externos.
+    let qrUrl;
+    try {
+      qrUrl = await QRCode.toDataURL(String(equipo.id), { width: 500, margin: 2 });
+    } catch (error) {
+      console.error("Error al generar el QR:", error);
+      Swal.fire("Error", "No se pudo generar el código QR de este equipo.", "error");
+      return;
+    }
+    const nombreSeguro = escapeHtml(equipo.nombre);
+    const idSeguro = escapeHtml(equipo.id);
 
     const result = await Swal.fire({
       title: `QR del Equipo`,
-      html: `<b>${equipo.nombre}</b><br/><small>ID: ${equipo.id}</small>`,
+      html: `<b>${nombreSeguro}</b><br/><small>ID: ${idSeguro}</small>`,
       imageUrl: qrUrl,
       imageWidth: 200,
       imageHeight: 200,
@@ -200,28 +212,23 @@ export default function Inventory() {
     });
 
     if (result.isDenied) {
-      try {
-        const response = await fetch(qrUrl);
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `QR_${equipo.id}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      } catch (error) {
-        console.error("Error al descargar el QR:", error);
-        window.open(qrUrl, '_blank');
-      }
-    } 
+      const link = document.createElement('a');
+      link.href = qrUrl;
+      link.download = `QR_${equipo.id}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
     else if (result.dismiss === Swal.DismissReason.cancel) {
       const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        Swal.fire("Ventana bloqueada", "Permite las ventanas emergentes de este sitio para imprimir el QR.", "warning");
+        return;
+      }
       printWindow.document.write(`
-        <html>
+        <html lang="es">
           <head>
-            <title>Imprimir QR - ${equipo.nombre}</title>
+            <title>Imprimir QR - ${nombreSeguro}</title>
             <style>
               body { text-align: center; font-family: Arial, sans-serif; margin-top: 50px; }
               img { margin-top: 20px; }
@@ -229,18 +236,22 @@ export default function Inventory() {
             </style>
           </head>
           <body>
-            <h2>${equipo.nombre}</h2>
-            <p><strong>ID:</strong> ${equipo.id}</p>
-            <img src="${qrUrl}" width="250" height="250" alt="QR Code" />
-            <script>
-              window.onload = function() {
-                setTimeout(() => { window.print(); window.close(); }, 500);
-              };
-            </script>
+            <h2>${nombreSeguro}</h2>
+            <p><strong>ID:</strong> ${idSeguro}</p>
+            <img src="${qrUrl}" width="250" height="250" alt="Código QR" />
           </body>
         </html>
       `);
       printWindow.document.close();
+      // Se imprime desde aquí: la ventana no ejecuta scripts propios.
+      const imprimir = () => {
+        printWindow.focus();
+        printWindow.print();
+        printWindow.close();
+      };
+      const img = printWindow.document.querySelector("img");
+      if (img?.complete) imprimir();
+      else img?.addEventListener("load", imprimir, { once: true });
     }
   };
 
@@ -379,22 +390,18 @@ export default function Inventory() {
         };
       });
 
-      const workbook = XLSX.utils.book_new();
-      if (datosHistorial.length > 0) {
-        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(datosHistorial), "Historial");
-      }
-      if (cambiosCarpetas.length > 0) {
-        const datosCarpetas = cambiosCarpetas.map((data) => ({
-          "Fecha y Hora": data.fecha ? new Date(data.fecha).toLocaleString("es-MX") : "Sin fecha",
-          "Acción efectuada": data.accion,
-          "Carpeta": data.carpeta,
-          "Equipos afectados": data.equiposAfectados ?? 0,
-          "Administrador": data.admin,
-          "Observaciones": data.observaciones,
-        }));
-        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(datosCarpetas), "Carpetas");
-      }
-      XLSX.writeFile(workbook, nombreArchivo);
+      const datosCarpetas = cambiosCarpetas.map((data) => ({
+        "Fecha y Hora": data.fecha ? new Date(data.fecha).toLocaleString("es-MX") : "Sin fecha",
+        "Acción efectuada": data.accion,
+        "Carpeta": data.carpeta,
+        "Equipos afectados": data.equiposAfectados ?? 0,
+        "Administrador": data.admin,
+        "Observaciones": data.observaciones,
+      }));
+      await descargarExcel(nombreArchivo, [
+        { nombre: "Historial", filas: datosHistorial },
+        { nombre: "Carpetas", filas: datosCarpetas },
+      ]);
       
       Swal.fire("¡Descarga lista!", "El archivo Excel se ha generado correctamente.", "success");
 

@@ -1,10 +1,10 @@
 # SIGAT Web
 
-## Migración de Firebase a Supabase
+Panel de administración de SIGAT. Usa Supabase Auth y PostgreSQL.
 
-La aplicación web usa Supabase Auth y PostgreSQL. Firebase Admin queda instalado
-únicamente para ejecutar la migración de una sola vez. La migración no se ejecuta
-al iniciar la app.
+> La migración desde Firebase ya se completó. El UID original de cada cuenta se
+> conserva en `profiles.firebase_uid`; el script de migración se retiró del
+> proyecto (sigue disponible en el historial de Git).
 
 ### 1. Configurar la app
 
@@ -33,9 +33,8 @@ perfil administrador en `profiles`.
 
 En **Authentication > URL Configuration**, agrega la URL donde correrá la app
 (por ejemplo `http://localhost:5173`) a las Redirect URLs permitidas. Las
-contraseñas de Firebase no se copian: las cuentas migradas reciben contraseñas
-aleatorias desconocidas y cada usuario debe usar **Restablecer contraseña** en
-el inicio de sesión.
+cuentas pueden recuperar el acceso con **Restablecer contraseña** en el inicio
+de sesión.
 
 ### 4. Desplegar la función de gestión de cuentas
 
@@ -44,9 +43,6 @@ servicio administrativo solo en el servidor. Despliega `manage-users` desde
 Supabase Dashboard o Supabase CLI. Configura `APP_ORIGIN` con el origen exacto
 de la app. La función usa los secretos de Supabase `SUPABASE_URL`,
 `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY`; nunca los pongas en el frontend.
-
-La creación inicial de usuarios se hace con el script de migración (paso 5), que
-usa la clave de servicio localmente y no necesita esta función.
 
 ### 5. Asignar contraseñas temporales únicas
 
@@ -72,47 +68,12 @@ privado y no compartas ni guardes la salida en el repositorio. El script marca
 las cuentas procesadas para no volver a cambiarles la contraseña si se ejecuta
 otra vez.
 
-### 6. Migrar Firestore y perfiles
-
-Primero haz una copia de seguridad de Firebase. Crea una clave de cuenta de
-servicio con acceso de lectura a Firestore y Firebase Authentication, guárdala
-fuera del repositorio y ejecuta desde PowerShell:
-
-```powershell
-$env:GOOGLE_APPLICATION_CREDENTIALS = "C:\ruta-segura\firebase-service-account.json"
-$env:SUPABASE_URL = "https://<project-ref>.supabase.co"
-$env:SUPABASE_SERVICE_ROLE_KEY = "<service-role-key>"
-npm run migrate:firebase
-```
-
-El script migra `Equipos`, `Historial` y los perfiles de `Usuarios`; crea las
-cuentas Supabase que falten, conserva el UID Firebase en `profiles.firebase_uid`
-y transforma fechas de Firestore a ISO y a la columna PostgreSQL `historial.fecha`.
-Es reejecutable para sincronizar los
-datos, pero antes de repetirlo revisa que el proyecto de destino sea el correcto.
-Nunca guardes la clave de servicio ni el archivo de Firebase en el repositorio.
-
-Revisa en Supabase los conteos de las tres tablas y prueba la app antes de pedir
-los restablecimientos. Configura un proveedor SMTP en Supabase Auth antes de
-enviarlos en producción; el correo de prueba integrado puede tener límites
-estrictos. Cuando Auth y el proveedor estén listos, puedes solicitar que se envíen:
-
-```powershell
-$env:SUPABASE_PASSWORD_RESET_REDIRECT = "http://localhost:5173"
-npm run migrate:firebase -- --send-password-resets
-```
-
-Usa una URL permitida y accesible para los usuarios. El script intenta enviar un
-restablecimiento por cada perfil migrado.
-
-### 7. Ejecutar y verificar
+### 6. Ejecutar y verificar
 
 ```bash
 npm install
 npm run dev
 npm run build
 npm run lint
+npm run test:db
 ```
-
-Mantén Firebase sin cambios hasta validar acceso, inventario, historial, reportes
-y recuperación de contraseña en el proyecto Supabase de prueba.

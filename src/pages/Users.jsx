@@ -8,6 +8,7 @@ import {
 import Sidebar from "../components/Sidebar";
 import Swal from "sweetalert2";
 import { useAuth } from "../context/useAuth";
+import { escapeHtml } from "../utils/html";
 
 export default function Users() {
 // EXTRAEMOS user (para el ID) Y userData (para el rol)
@@ -65,7 +66,7 @@ setLoading(false);
 // ==========================================
 const handleEditUser = async (usuario) => {
 // 1. Bloquear que el superadmin se edite a sí mismo
-if (userData?.rol === "superadmin" && usuario.id === user.uid) {
+if (userData?.rol === "superadmin" && usuario.id === user.id) {
     Swal.fire('Acción Bloqueada', 'Como Super Administrador no puedes editar tu propio perfil.', 'error');
     return;
 }
@@ -77,7 +78,7 @@ if (userData?.rol !== "superadmin" && usuario.rol === "superadmin") {
 }
 
 // Identificamos si el usuario se está editando a sí mismo (para el caso del admin)
-const isSelfEdit = usuario.id === user.uid;
+const isSelfEdit = usuario.id === user.id;
 // Un admin no puede cambiar su propio rol
 const canChangeRole = userData?.rol === "superadmin" || !isSelfEdit;
 
@@ -86,7 +87,7 @@ const { value: formValues } = await Swal.fire({
     html:
     `<div style="text-align: left;">
         <label style="font-size: 14px; font-weight: bold;">Nombre:</label>
-        <input id="swal-input-nombre" class="swal2-input" value="${usuario.nombre || ''}" style="margin-top: 5px; margin-bottom: 15px; width: 80%;">
+        <input id="swal-input-nombre" class="swal2-input" value="${escapeHtml(usuario.nombre)}" style="margin-top: 5px; margin-bottom: 15px; width: 80%;">
         
         <label style="font-size: 14px; font-weight: bold;">Rol:</label>
         <select id="swal-input-rol" class="swal2-select" style="width: 80%; padding: 10px; margin-bottom: 20px;" ${!canChangeRole ? 'disabled' : ''}>
@@ -102,7 +103,7 @@ const { value: formValues } = await Swal.fire({
                 <b>Enviar correo para restablecer contraseña</b>
             </label>
             <small style="display: block; color: #666; margin-top: 5px; margin-left: 28px;">
-                Se enviará un enlace a <b>${usuario.email}</b> para que asigne una nueva clave.
+                Se enviará un enlace a <b>${escapeHtml(usuario.email)}</b> para que asigne una nueva clave.
             </small>
         </div>
     </div>`,
@@ -167,7 +168,7 @@ if (formValues) {
 // ==========================================
 const handleDeleteUser = async (targetUser) => {
 // 1. Evitar que el usuario se borre a sí mismo
-if (targetUser.id === user.uid) {
+if (targetUser.id === user.id) {
     Swal.fire('Acción Bloqueada', 'Por seguridad, no puedes eliminar tu propia cuenta.', 'error');
     return;
 }
@@ -252,14 +253,14 @@ return (
                 <td style={{ ...styles.td, textAlign: "center", display: "flex", gap: "8px", justifyContent: "center" }}>
                     
                     {/* Botón de Editar: Se oculta para el propio Super Admin */}
-                    {(userData?.rol === "admin" || userData?.rol === "superadmin") && !(userData?.rol === "superadmin" && u.id === user.uid) && (
+                    {(userData?.rol === "admin" || userData?.rol === "superadmin") && !(userData?.rol === "superadmin" && u.id === user.id) && (
                         <button onClick={() => handleEditUser(u)} style={styles.btnEdit}>
                         Editar
                         </button>
                     )}
 
                     {/* Botón de Eliminar condicionado por rol Y bloqueando la cuenta propia */}
-                    {u.id !== user.uid && (userData?.rol === "superadmin" || (userData?.rol === "admin" && u.rol === "usuario")) && (
+                    {u.id !== user.id && (userData?.rol === "superadmin" || (userData?.rol === "admin" && u.rol === "usuario")) && (
                         <button onClick={() => handleDeleteUser(u)} style={styles.btnDelete}>
                         Borrar
                         </button>
