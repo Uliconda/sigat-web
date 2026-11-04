@@ -1,2 +1,7 @@
 [functions.manage-users]
 verify_jwt = true
+
+# El cron se autentica con x-cron-secret; las sesiones de administrador se
+# validan dentro de la función.
+[functions.notificaciones-prestamos]
+verify_jwt = false

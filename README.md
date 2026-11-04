@@ -1,10 +1,10 @@
 # SIGAT Web
 
-## Migración de Firebase a Supabase
+Panel de administración de SIGAT. Usa Supabase Auth y PostgreSQL.
 
-La aplicación web usa Supabase Auth y PostgreSQL. Firebase Admin queda instalado
-únicamente para ejecutar la migración de una sola vez. La migración no se ejecuta
-al iniciar la app.
+> La migración desde Firebase ya se completó. El UID original de cada cuenta se
+> conserva en `profiles.firebase_uid`; el script de migración se retiró del
+> proyecto (sigue disponible en el historial de Git).
 
 ### 1. Configurar la app
 
@@ -33,20 +33,17 @@ perfil administrador en `profiles`.
 
 En **Authentication > URL Configuration**, agrega la URL donde correrá la app
 (por ejemplo `http://localhost:5173`) a las Redirect URLs permitidas. Las
-contraseñas de Firebase no se copian: las cuentas migradas reciben contraseñas
-aleatorias desconocidas y cada usuario debe usar **Restablecer contraseña** en
-el inicio de sesión.
+cuentas pueden recuperar el acceso con **Restablecer contraseña** en el inicio
+de sesión.
 
 ### 4. Desplegar la función de gestión de cuentas
 
 `supabase/functions/manage-users/index.ts` crea y elimina cuentas usando el
 servicio administrativo solo en el servidor. Despliega `manage-users` desde
-Supabase Dashboard o Supabase CLI. Configura `APP_ORIGIN` con el origen exacto
-de la app. La función usa los secretos de Supabase `SUPABASE_URL`,
+Supabase Dashboard o Supabase CLI. Configura `APP_ORIGIN` con los orígenes
+desde donde se abre la app, separados por comas (por ejemplo
+`http://localhost:5173,http://192.168.1.246:5173,https://sigat.midominio.mx`). La función usa los secretos de Supabase `SUPABASE_URL`,
 `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY`; nunca los pongas en el frontend.
-
-La creación inicial de usuarios se hace con el script de migración (paso 5), que
-usa la clave de servicio localmente y no necesita esta función.
 
 ### 5. Asignar contraseñas temporales únicas
 
@@ -72,38 +69,43 @@ privado y no compartas ni guardes la salida en el repositorio. El script marca
 las cuentas procesadas para no volver a cambiarles la contraseña si se ejecuta
 otra vez.
 
-### 6. Migrar Firestore y perfiles
+### 6. Notificaciones de préstamos (correos)
 
-Primero haz una copia de seguridad de Firebase. Crea una clave de cuenta de
-servicio con acceso de lectura a Firestore y Firebase Authentication, guárdala
-fuera del repositorio y ejecuta desde PowerShell:
+Los correos a alumnos se envían desde la Edge Function
+`supabase/functions/notificaciones-prestamos`, nunca desde el navegador. La
+función marca como falta los préstamos con más de 48 h (excepto la categoría
+ADMINISTRATIVOS), envía el aviso con EmailJS y lo registra en el historial.
+Las marcas manuales y los reenvíos del Dashboard también pasan por ella.
 
-```powershell
-$env:GOOGLE_APPLICATION_CREDENTIALS = "C:\ruta-segura\firebase-service-account.json"
-$env:SUPABASE_URL = "https://<project-ref>.supabase.co"
-$env:SUPABASE_SERVICE_ROLE_KEY = "<service-role-key>"
-npm run migrate:firebase
-```
+1. **EmailJS** → *Account > Security*: activa **Allow EmailJS API for
+   non-browser applications** y **Use Private Key**. Con esto, la clave pública
+   ya no basta para enviar correos con tu cuenta.
+2. **Aplica la migración** `supabase/migrations/20261104000000_alertas_prestamos.sql`
+   en el SQL Editor (o con `npx supabase db push`).
+3. **Configura los secretos** y despliega la función:
 
-El script migra `Equipos`, `Historial` y los perfiles de `Usuarios`; crea las
-cuentas Supabase que falten, conserva el UID Firebase en `profiles.firebase_uid`
-y transforma fechas de Firestore a ISO y a la columna PostgreSQL `historial.fecha`.
-Es reejecutable para sincronizar los
-datos, pero antes de repetirlo revisa que el proyecto de destino sea el correcto.
-Nunca guardes la clave de servicio ni el archivo de Firebase en el repositorio.
+   ```powershell
+   # Llena supabase/functions/.env (ignorado por Git) y súbelo:
+   npx supabase secrets set --env-file supabase/functions/.env
+   npx supabase functions deploy notificaciones-prestamos manage-users
+   ```
 
-Revisa en Supabase los conteos de las tres tablas y prueba la app antes de pedir
-los restablecimientos. Configura un proveedor SMTP en Supabase Auth antes de
-enviarlos en producción; el correo de prueba integrado puede tener límites
-estrictos. Cuando Auth y el proveedor estén listos, puedes solicitar que se envíen:
+   Variables: `APP_ORIGIN` (lista separada por comas), `EMAILJS_SERVICE_ID`,
+   `EMAILJS_TEMPLATE_ID`, `EMAILJS_PUBLIC_KEY`, `EMAILJS_PRIVATE_KEY` y
+   `CRON_SECRET`. La plantilla del correo está en
+   `supabase/functions/notificaciones-prestamos/plantilla-correo.html`.
+   Opcionales: `ALUMNOS_EMAIL_DOMAIN` (por defecto `cesba-queretaro.edu.mx`) y
+   `HORAS_LIMITE_PRESTAMO` (por defecto `48`). Para generar `CRON_SECRET` puedes
+   usar `node -e "console.log(crypto.randomUUID() + crypto.randomUUID())"`.
+4. **Programa la revisión cada hora**: edita `supabase/cron/alertas-prestamos.sql`
+   con la URL del proyecto y el mismo `CRON_SECRET`, y ejecútalo una vez en el
+   SQL Editor. Revisa las ejecuciones con
+   `select * from cron.job_run_details order by start_time desc limit 10;`.
 
-```powershell
-$env:SUPABASE_PASSWORD_RESET_REDIRECT = "http://localhost:5173"
-npm run migrate:firebase -- --send-password-resets
-```
-
-Usa una URL permitida y accesible para los usuarios. El script intenta enviar un
-restablecimiento por cada perfil migrado.
+Si un correo falla, el equipo vuelve a "Prestado" y se reintenta en la siguiente
+hora. Los préstamos sin matrícula se marcan como falta y el historial indica que
+no se pudo enviar el correo. Cada préstamo nuevo reinicia su alerta
+automáticamente (trigger `equipos_reiniciar_alerta`).
 
 ### 7. Ejecutar y verificar
 
@@ -112,7 +114,5 @@ npm install
 npm run dev
 npm run build
 npm run lint
+npm run test:db
 ```
-
-Mantén Firebase sin cambios hasta validar acceso, inventario, historial, reportes
-y recuperación de contraseña en el proyecto Supabase de prueba.

@@ -2,11 +2,17 @@
 // Simula las piezas propias de Supabase: auth.uid(), roles y la publicación de Realtime.
 // Uso: npm run test:db
 import { PGlite } from "@electric-sql/pglite";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const schemaPath = fileURLToPath(new URL("../migrations/20261020000000_initial_schema.sql", import.meta.url));
-const schema = readFileSync(schemaPath, "utf8");
+// Todas las migraciones, en orden, como las aplicaría Supabase.
+const migrationsDir = fileURLToPath(new URL("../migrations/", import.meta.url));
+const schema = readdirSync(migrationsDir)
+  .filter((file) => file.endsWith(".sql"))
+  .sort()
+  .map((file) => readFileSync(join(migrationsDir, file), "utf8"))
+  .join("\n");
 const db = new PGlite();
 
 const ids = {
@@ -57,6 +63,7 @@ await db.exec(`
     as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   create role anon;
   create role authenticated;
+  create role service_role;
   create publication supabase_realtime;
 `);
 
@@ -182,6 +189,49 @@ check("la eliminación guarda cuántos equipos se reasignaron",
 check("el autor es la cuenta que hizo el cambio", cambios.every((r) => r.data.admin === "Cuenta admin"));
 check("los intentos rechazados no dejan registro", cambios.length === 3);
 check("incluye la fecha que usan los reportes de la web", cambios.every((r) => !Number.isNaN(Date.parse(r.data.fecha))));
+
+console.log("14. Alertas de préstamos vencidos");
+await as("");
+const haceHoras = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+for (const [id, data] of [
+  ["AL-1", { nombre: "Vencido", categoria: "Cómputo", estado: "Prestado", fecha_prestamo: haceHoras(50) }],
+  ["AL-2", { nombre: "Reciente", categoria: "Cómputo", estado: "Prestado", fecha_prestamo: haceHoras(10) }],
+  ["AL-3", { nombre: "Administrativo", categoria: "administrativos", estado: "Prestado", fecha_prestamo: haceHoras(72) }],
+  ["AL-4", { nombre: "Ya avisado", categoria: "Cómputo", estado: "Prestado", alerta_enviada: true, fecha_prestamo: haceHoras(72) }],
+  ["AL-5", { nombre: "Firestore", categoria: "Audio", estado: "PRESTADO", fecha_prestamo: { seconds: Math.floor(Date.now() / 1000) - 60 * 3600 } }],
+  ["AL-6", { nombre: "Fecha rota", categoria: "Audio", estado: "Prestado", fecha_prestamo: "no es fecha" }],
+  ["AL-7", { nombre: "Disponible", categoria: "Audio", estado: "Disponible", fecha_prestamo: haceHoras(99) }],
+]) {
+  await db.query(`insert into public.equipos (id, data) values ($1, $2)`, [id, data]);
+}
+const reclamados = (await rows(`select id from public.reclamar_prestamos_vencidos(48) order by id`)).map((r) => r.id);
+check("reclama solo los préstamos de más de 48 h (ISO y Firestore)", JSON.stringify(reclamados) === JSON.stringify(["AL-1", "AL-5"]), JSON.stringify(reclamados));
+const [al1] = await rows(`select data from public.equipos where id = 'AL-1'`);
+check("los marca como No responde con alerta enviada", al1.data.estado === "No responde" && al1.data.alerta_enviada === true, JSON.stringify(al1.data));
+check("una segunda ejecución no los vuelve a reclamar", (await rows(`select * from public.reclamar_prestamos_vencidos(48)`)).length === 0);
+check("liberar devuelve el equipo a Prestado", (await rows(`select public.liberar_alerta_prestamo('AL-1') as ok`))[0].ok === true);
+check("liberado, se vuelve a reclamar en la siguiente revisión",
+  JSON.stringify((await rows(`select id from public.reclamar_prestamos_vencidos(48)`)).map((r) => r.id)) === '["AL-1"]');
+check("no libera un equipo que ya cambió", (await rows(`select public.liberar_alerta_prestamo('AL-2') as ok`))[0].ok === false);
+
+await db.query(`update public.equipos set data = data || '{"estado":"Disponible"}' where id = 'AL-4'`);
+const [al4] = await rows(`select data from public.equipos where id = 'AL-4'`);
+check("al devolver el equipo se reinicia la alerta", al4.data.alerta_enviada === false, JSON.stringify(al4.data));
+await db.query(`update public.equipos set data = data || '{"alerta_enviada":true}' where id = 'AL-7'`);
+await db.query(`update public.equipos set data = data || '{"estado":"Prestado"}' where id = 'AL-7'`);
+const [al7] = await rows(`select data from public.equipos where id = 'AL-7'`);
+check("un préstamo nuevo empieza sin alerta", al7.data.alerta_enviada === false, JSON.stringify(al7.data));
+await db.query(`update public.equipos set data = data || '{"estado":"Prestado","alerta_enviada":true}' where id = 'AL-1'`);
+const [al1b] = await rows(`select data from public.equipos where id = 'AL-1'`);
+check("retirar una falta conserva la alerta enviada", al1b.data.alerta_enviada === true, JSON.stringify(al1b.data));
+
+await db.exec(`set role authenticated`);
+await expectError("una cuenta de la app no puede reclamar alertas", `select * from public.reclamar_prestamos_vencidos(48)`, [], /permission denied/);
+await expectError("una cuenta de la app no puede liberar alertas", `select public.liberar_alerta_prestamo('AL-1')`, [], /permission denied/);
+await db.exec(`reset role`);
+await db.exec(`set role service_role`);
+check("la clave de servicio sí puede ejecutarlas", Array.isArray(await rows(`select * from public.reclamar_prestamos_vencidos(48)`)));
+await db.exec(`reset role`);
 
 console.log(`\n${passed} correctas, ${failed} fallidas`);
 process.exit(failed ? 1 : 0);
