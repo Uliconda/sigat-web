@@ -1,35 +1,60 @@
 import { supabase } from "../config/supabase";
+import type {
+  AccionNotificacion,
+  Equipo,
+  EquipoData,
+  EquipoRow,
+  Historial,
+  HistorialData,
+  HistorialRow,
+  Perfil,
+  PerfilRow,
+  ResultadoNotificacion,
+  Rol,
+} from "../types";
 import { errorDeFuncion } from "../utils/errores";
-import { crearSuscripcionCompartida } from "./realtimeStore";
+import { crearSuscripcionCompartida, type CambioTiempoReal, type OpcionesSuscripcion } from "./realtimeStore";
 
-function throwIfError(error) {
+function throwIfError(error: unknown): void {
   if (error) throw error;
 }
 
-function mapRecord(record) {
+function mapRecord<Data extends object>(record: { id: string; data: Data }): Data & { id: string } {
   return { ...record.data, id: record.id };
 }
 
+type ConsultaTabla = ReturnType<ReturnType<typeof supabase.from>["select"]>;
+
+interface OpcionesTabla<Fila, Salida> extends Omit<OpcionesSuscripcion<Fila, Salida>, "cargar" | "conectar"> {
+  columnas?: string;
+  filtrar?: (consulta: ConsultaTabla) => ConsultaTabla;
+}
+
 // Una suscripción compartida por tabla: una sola conexión y cambios incrementales.
-function tablaEnTiempoReal(table, { columnas = "*", filtrar = (consulta) => consulta, ...opciones } = {}) {
-  return crearSuscripcionCompartida({
+function tablaEnTiempoReal<Fila extends object, Salida>(
+  table: string,
+  { columnas = "*", filtrar = (consulta) => consulta, ...opciones }: OpcionesTabla<Fila, Salida>
+) {
+  return crearSuscripcionCompartida<Fila, Salida>({
     ...opciones,
     cargar: async () => {
       const { data, error } = await filtrar(supabase.from(table).select(columnas));
       throwIfError(error);
-      return data;
+      return (data ?? []) as unknown as Fila[];
     },
     conectar: (onCambio, onEstado) => {
       const channel = supabase
         .channel(`${table}-cambios-${crypto.randomUUID()}`)
-        .on("postgres_changes", { event: "*", schema: "public", table }, onCambio)
+        .on("postgres_changes", { event: "*", schema: "public", table }, (payload) =>
+          onCambio(payload as unknown as CambioTiempoReal<Fila>)
+        )
         .subscribe(onEstado);
       return () => void supabase.removeChannel(channel);
     },
   });
 }
 
-function mapProfile(profile) {
+function mapProfile(profile: PerfilRow): Perfil {
   return {
     id: profile.id,
     firebase_uid: profile.firebase_uid,
@@ -41,31 +66,33 @@ function mapProfile(profile) {
   };
 }
 
+const COLUMNAS_PERFIL = "id, firebase_uid, nombre, email, rol, must_change_password, created_at";
+
 // El Dashboard solo grafica la actividad reciente; así no descarga todo el historial.
 export const DIAS_HISTORIAL_DASHBOARD = 90;
 const inicioHistorial = () => new Date(Date.now() - DIAS_HISTORIAL_DASHBOARD * 24 * 60 * 60 * 1000);
 
-export const subscribeToEquipos = tablaEnTiempoReal("equipos", { mapear: mapRecord });
+export const subscribeToEquipos = tablaEnTiempoReal<EquipoRow, Equipo>("equipos", { mapear: mapRecord });
 
-export const subscribeToHistorial = tablaEnTiempoReal("historial", {
+export const subscribeToHistorial = tablaEnTiempoReal<HistorialRow, Historial>("historial", {
   columnas: "id, fecha, data",
   filtrar: (consulta) => consulta.gte("fecha", inicioHistorial().toISOString()),
-  incluir: (fila) => Boolean(fila.fecha) && new Date(fila.fecha) >= inicioHistorial(),
+  incluir: (fila) => Boolean(fila.fecha) && new Date(fila.fecha as string) >= inicioHistorial(),
   mapear: mapRecord,
 });
 
-export const subscribeToProfiles = tablaEnTiempoReal("profiles", {
-  columnas: "id, firebase_uid, nombre, email, rol, must_change_password, created_at",
+export const subscribeToProfiles = tablaEnTiempoReal<PerfilRow, Perfil>("profiles", {
+  columnas: COLUMNAS_PERFIL,
   mapear: mapProfile,
 });
 
-export async function getEquipos() {
+export async function getEquipos(): Promise<Equipo[]> {
   const { data, error } = await supabase.from("equipos").select("*");
   throwIfError(error);
-  return data.map(mapRecord);
+  return ((data ?? []) as EquipoRow[]).map(mapRecord);
 }
 
-export async function getHistorial({ start, end } = {}) {
+export async function getHistorial({ start, end }: { start?: Date; end?: Date } = {}): Promise<Historial[]> {
   let request = supabase.from("historial").select("id, fecha, data");
 
   if (start) request = request.gte("fecha", start.toISOString());
@@ -73,10 +100,10 @@ export async function getHistorial({ start, end } = {}) {
 
   const { data, error } = await request.order("fecha", { ascending: false });
   throwIfError(error);
-  return data.map(mapRecord);
+  return ((data ?? []) as HistorialRow[]).map(mapRecord);
 }
 
-export async function updateEquipo(id, changes) {
+export async function updateEquipo(id: string, changes: Partial<EquipoData>): Promise<void> {
   const { error } = await supabase.rpc("update_equipo", {
     p_id: id,
     p_changes: changes,
@@ -84,7 +111,7 @@ export async function updateEquipo(id, changes) {
   throwIfError(error);
 }
 
-export async function addHistorial(entry) {
+export async function addHistorial(entry: HistorialData): Promise<void> {
   const parsedDate = entry.fecha ? new Date(entry.fecha) : null;
   if (parsedDate && Number.isNaN(parsedDate.getTime())) {
     throw new Error("La fecha del movimiento no es válida.");
@@ -97,27 +124,18 @@ export async function addHistorial(entry) {
   throwIfError(error);
 }
 
-export async function getProfile(id) {
+export async function getProfile(id: string): Promise<Perfil | null> {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, firebase_uid, nombre, email, rol, must_change_password, created_at")
+    .select(COLUMNAS_PERFIL)
     .eq("id", id)
     .maybeSingle();
   throwIfError(error);
-  if (!data) return null;
-  return {
-    id: data.id,
-    firebase_uid: data.firebase_uid,
-    nombre: data.nombre,
-    email: data.email,
-    rol: data.rol,
-    must_change_password: data.must_change_password,
-    createdAt: data.created_at,
-  };
+  return data ? mapProfile(data as PerfilRow) : null;
 }
 
-export async function updateProfile(id, changes) {
-  const fields = {};
+export async function updateProfile(id: string, changes: { nombre?: string; rol?: Rol }): Promise<void> {
+  const fields: { nombre?: string; rol?: Rol } = {};
   if (Object.hasOwn(changes, "nombre")) fields.nombre = changes.nombre;
   if (Object.hasOwn(changes, "rol")) fields.rol = changes.rol;
 
@@ -132,11 +150,11 @@ export async function updateProfile(id, changes) {
 }
 
 // Llama a la Edge Function de notificaciones (los correos se envían en el servidor).
-// action: "marcar-falta" | "reenviar-correo" | "revisar-vencidos"
-export async function notificarPrestamo(action, equipoId) {
-  const { data, error } = await supabase.functions.invoke("notificaciones-prestamos", {
+export async function notificarPrestamo(action: AccionNotificacion, equipoId?: string): Promise<ResultadoNotificacion> {
+  const { data, error } = await supabase.functions.invoke<ResultadoNotificacion>("notificaciones-prestamos", {
     body: { action, equipoId },
   });
   if (error) throw await errorDeFuncion(error);
+  if (!data) throw new Error("La función no devolvió respuesta.");
   return data;
 }

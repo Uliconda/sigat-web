@@ -1,13 +1,19 @@
 // Genera y descarga un archivo .xlsx con una o varias hojas.
 // SheetJS se carga solo al exportar para no aumentar la carga inicial de la app.
-//
-// hojas: [{ nombre: "Historial", filas: [{ "Columna": valor, ... }] }]
-export async function descargarExcel(nombreArchivo, hojas) {
+
+export type FilaExcel = Record<string, unknown>;
+
+export interface HojaExcel {
+  nombre: string;
+  filas: FilaExcel[];
+}
+
+export async function descargarExcel(nombreArchivo: string, hojas: HojaExcel[]): Promise<void> {
   const XLSX = await import("xlsx");
   const workbook = XLSX.utils.book_new();
 
   for (const { nombre, filas } of hojas) {
-    if (!filas?.length) continue;
+    if (!filas.length) continue;
     const sheet = XLSX.utils.json_to_sheet(filas);
     const columnas = Object.keys(filas[0]);
 
@@ -19,7 +25,7 @@ export async function descargarExcel(nombreArchivo, hojas) {
       ),
     }));
     // Filtros en el encabezado.
-    sheet["!autofilter"] = { ref: sheet["!ref"] };
+    if (sheet["!ref"]) sheet["!autofilter"] = { ref: sheet["!ref"] };
 
     XLSX.utils.book_append_sheet(workbook, sheet, nombre);
   }

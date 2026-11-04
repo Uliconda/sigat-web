@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ESTADOS, esEstado, estaFuera } from "./estados.js";
+import { ESTADOS, esEstado, estaFuera } from "./estados.ts";
 
 test("esEstado ignora mayúsculas y espacios de datos antiguos", () => {
   assert.equal(esEstado("PRESTADO", ESTADOS.PRESTADO), true);

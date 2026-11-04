@@ -1,7 +1,7 @@
 // Pruebas de la suscripción compartida en tiempo real. Uso: npm run test:web
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { crearSuscripcionCompartida } from "./realtimeStore.js";
+import { crearSuscripcionCompartida } from "./realtimeStore.ts";
 
 // Simula Supabase: una "base" en memoria y un canal que se controla a mano.
 function simulador(filasIniciales) {

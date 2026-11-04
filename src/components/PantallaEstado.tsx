@@ -1,10 +1,24 @@
 import { supabase } from "../config/supabase";
 import "./PantallaEstado.css";
 
+interface PantallaEstadoProps {
+  tipo?: "cargando" | "error" | "denegado";
+  titulo?: string;
+  mensaje?: string;
+  onReintentar?: () => void;
+  mostrarCerrarSesion?: boolean;
+}
+
+const ICONOS = { cargando: null, error: "⚠️", denegado: "🔒" } as const;
+
 // Pantalla centrada para carga, errores y accesos denegados.
-// tipo: "cargando" | "error" | "denegado"
-export function PantallaEstado({ tipo = "cargando", titulo, mensaje, onReintentar, mostrarCerrarSesion = false }) {
-  const iconos = { cargando: null, error: "⚠️", denegado: "🔒" };
+export function PantallaEstado({
+  tipo = "cargando",
+  titulo,
+  mensaje,
+  onReintentar,
+  mostrarCerrarSesion = false,
+}: PantallaEstadoProps) {
 
   return (
     <div className="pantalla-estado" role={tipo === "cargando" ? "status" : "alert"} aria-live="polite">
@@ -12,7 +26,7 @@ export function PantallaEstado({ tipo = "cargando", titulo, mensaje, onReintenta
         {tipo === "cargando" ? (
           <div className="pantalla-estado__spinner" aria-hidden="true" />
         ) : (
-          <div className="pantalla-estado__icono" aria-hidden="true">{iconos[tipo]}</div>
+          <div className="pantalla-estado__icono" aria-hidden="true">{ICONOS[tipo]}</div>
         )}
         <h1 className="pantalla-estado__titulo">{titulo ?? (tipo === "cargando" ? "Cargando SIGAT…" : "Algo salió mal")}</h1>
         {mensaje && <p className="pantalla-estado__mensaje">{mensaje}</p>}

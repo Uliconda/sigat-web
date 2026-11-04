@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
-import { ThemeContext } from "./theme";
+import { useEffect, useState, type ReactNode } from "react";
+import { ThemeContext, type Tema } from "./theme";
 
 const STORAGE_KEY = "appTheme";
-const consultaOscuro = () => window.matchMedia?.("(prefers-color-scheme: dark)");
+const consultaOscuro = (): MediaQueryList | undefined => window.matchMedia?.("(prefers-color-scheme: dark)");
 
-function leerGuardado() {
+function leerGuardado(): Tema | null {
   try {
     const valor = localStorage.getItem(STORAGE_KEY);
     return valor === "dark" || valor === "light" ? valor : null;
@@ -14,10 +14,10 @@ function leerGuardado() {
 }
 
 // Tema elegido antes por el usuario o, si nunca eligió, el del sistema operativo.
-const temaInicial = () => leerGuardado() ?? (consultaOscuro()?.matches ? "dark" : "light");
+const temaInicial = (): Tema => leerGuardado() ?? (consultaOscuro()?.matches ? "dark" : "light");
 
-export const ThemeProvider = ({ children }) => {
-  const [theme, setTheme] = useState(temaInicial);
+export const ThemeProvider = ({ children }: { children: ReactNode }) => {
+  const [theme, setTheme] = useState<Tema>(temaInicial);
 
   // Cada vez que el tema cambia, se aplica la clase en el HTML principal.
   useEffect(() => {
@@ -29,7 +29,7 @@ export const ThemeProvider = ({ children }) => {
   useEffect(() => {
     const media = consultaOscuro();
     if (!media) return undefined;
-    const onChange = (event) => {
+    const onChange = (event: MediaQueryListEvent) => {
       if (!leerGuardado()) setTheme(event.matches ? "dark" : "light");
     };
     media.addEventListener("change", onChange);
@@ -39,7 +39,7 @@ export const ThemeProvider = ({ children }) => {
   // Alterna entre claro y oscuro y recuerda la elección.
   const toggleTheme = () => {
     setTheme((prevTheme) => {
-      const newTheme = prevTheme === "light" ? "dark" : "light";
+      const newTheme: Tema = prevTheme === "light" ? "dark" : "light";
       try {
         localStorage.setItem(STORAGE_KEY, newTheme);
       } catch {
