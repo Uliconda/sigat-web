@@ -460,3 +460,332 @@ drop trigger if exists historial_stamp_author on public.historial;
 create trigger historial_stamp_author
   before insert on public.historial
   for each row execute function public.stamp_historial_author();
+
+-- ==========================================================================
+-- Estados con un solo formato (el que escriben SIGAT Web y la app móvil).
+-- Convierte valores históricos como "PRESTADO" o "DISPONIBLE".
+-- ==========================================================================
+update public.equipos
+set data = jsonb_set(
+  data,
+  '{estado}',
+  to_jsonb(case upper(btrim(data ->> 'estado'))
+    when 'DISPONIBLE' then 'Disponible'
+    when 'PRESTADO' then 'Prestado'
+    when 'SIN ENTREGAR' then 'Sin entregar'
+    when 'NO RESPONDE' then 'No responde'
+    when 'FUERA DE SERVICIO' then 'Fuera de Servicio'
+  end)
+)
+where upper(btrim(data ->> 'estado')) in ('DISPONIBLE', 'PRESTADO', 'SIN ENTREGAR', 'NO RESPONDE', 'FUERA DE SERVICIO')
+  and data ->> 'estado' not in ('Disponible', 'Prestado', 'Sin entregar', 'No responde', 'Fuera de Servicio');
+
+-- ==========================================================================
+-- Carpetas del inventario: Categoría (1) > Subcategoría (2) > Sección (3).
+-- Reemplazan a los equipos "Plantilla Sistema" que se usaban para que una
+-- carpeta vacía existiera. Los equipos siguen guardando los nombres de su
+-- carpeta en data (categoria, subcategoria, subSubcategoria) y un trigger
+-- crea automáticamente las carpetas que use cualquier equipo.
+-- ==========================================================================
+create table if not exists public.carpetas (
+  id uuid primary key default gen_random_uuid(),
+  parent_id uuid references public.carpetas (id) on delete cascade,
+  nombre text not null,
+  nivel smallint not null,
+  created_at timestamptz not null default now(),
+  constraint carpetas_nombre_normalizado check (nombre <> '' and nombre = upper(btrim(nombre))),
+  constraint carpetas_nivel_valido check (nivel between 1 and 3),
+  constraint carpetas_raiz_sin_padre check ((nivel = 1) = (parent_id is null)),
+  constraint carpetas_parent_nombre_key unique nulls not distinct (parent_id, nombre)
+);
+
+create index if not exists carpetas_parent_idx on public.carpetas (parent_id);
+
+-- Mismo criterio que normalizarCarpeta() en la app: mayúsculas, sin espacios
+-- sobrantes y "GENERAL" si está vacío.
+create or replace function public.normalizar_carpeta(p_nombre text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(nullif(upper(btrim(p_nombre)), ''), 'GENERAL');
+$$;
+
+create or replace function public.campo_carpeta(p_nivel smallint)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select case p_nivel when 1 then 'categoria' when 2 then 'subcategoria' else 'subSubcategoria' end;
+$$;
+
+-- Crea (si no existen) las tres carpetas de una ruta y devuelve la sección.
+create or replace function public.ensure_carpeta_path(p_categoria text, p_subcategoria text, p_seccion text)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_cat_nombre text := public.normalizar_carpeta(p_categoria);
+  v_sub_nombre text := public.normalizar_carpeta(p_subcategoria);
+  v_sec_nombre text := public.normalizar_carpeta(p_seccion);
+  v_cat uuid;
+  v_sub uuid;
+  v_sec uuid;
+begin
+  insert into public.carpetas (parent_id, nombre, nivel)
+  values (null, v_cat_nombre, 1)
+  on conflict (parent_id, nombre) do nothing;
+  select id into v_cat from public.carpetas where parent_id is null and nombre = v_cat_nombre;
+
+  insert into public.carpetas (parent_id, nombre, nivel)
+  values (v_cat, v_sub_nombre, 2)
+  on conflict (parent_id, nombre) do nothing;
+  select id into v_sub from public.carpetas where parent_id = v_cat and nombre = v_sub_nombre;
+
+  insert into public.carpetas (parent_id, nombre, nivel)
+  values (v_sub, v_sec_nombre, 3)
+  on conflict (parent_id, nombre) do nothing;
+  select id into v_sec from public.carpetas where parent_id = v_sub and nombre = v_sec_nombre;
+
+  return v_sec;
+end;
+$$;
+
+create or replace function public.sync_carpetas_equipo()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if tg_op = 'UPDATE'
+    and old.data ->> 'categoria' is not distinct from new.data ->> 'categoria'
+    and old.data ->> 'subcategoria' is not distinct from new.data ->> 'subcategoria'
+    and old.data ->> 'subSubcategoria' is not distinct from new.data ->> 'subSubcategoria'
+  then
+    return new;
+  end if;
+
+  perform public.ensure_carpeta_path(
+    new.data ->> 'categoria',
+    new.data ->> 'subcategoria',
+    new.data ->> 'subSubcategoria'
+  );
+  return new;
+end;
+$$;
+
+drop trigger if exists equipos_sync_carpetas on public.equipos;
+create trigger equipos_sync_carpetas
+  after insert or update of data on public.equipos
+  for each row execute function public.sync_carpetas_equipo();
+
+-- Carga inicial: las carpetas que ya usan los equipos (incluidas las plantillas).
+do $$
+declare
+  r record;
+begin
+  for r in select data from public.equipos loop
+    perform public.ensure_carpeta_path(r.data ->> 'categoria', r.data ->> 'subcategoria', r.data ->> 'subSubcategoria');
+  end loop;
+end;
+$$;
+
+-- Las plantillas ya no son necesarias: sus carpetas quedaron en la tabla.
+delete from public.equipos
+where data ->> 'isTemplate' = 'true'
+   or (data ->> 'estado' = 'SISTEMA' and lower(data ->> 'nombre') = 'plantilla sistema');
+
+-- Crea una carpeta vacía dentro de otra (o una categoría si p_parent_id es null).
+create or replace function public.crear_carpeta(p_parent_id uuid, p_nombre text)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_nombre text := public.normalizar_carpeta(p_nombre);
+  v_nivel smallint := 1;
+  v_id uuid;
+begin
+  if not (select public.is_sigat_admin()) then
+    raise exception 'Solo un administrador puede crear carpetas.' using errcode = '42501';
+  end if;
+
+  if p_parent_id is not null then
+    select nivel + 1 into v_nivel from public.carpetas where id = p_parent_id;
+    if v_nivel is null then
+      raise exception 'La carpeta superior no existe.';
+    end if;
+    if v_nivel > 3 then
+      raise exception 'Solo se permiten tres niveles de carpetas.';
+    end if;
+  end if;
+
+  insert into public.carpetas (parent_id, nombre, nivel)
+  values (p_parent_id, v_nombre, v_nivel)
+  on conflict (parent_id, nombre) do nothing
+  returning id into v_id;
+
+  if v_id is null then
+    raise exception 'Ya existe una carpeta "%" en este nivel.', v_nombre using errcode = '23505';
+  end if;
+  return v_id;
+end;
+$$;
+
+-- IDs de los equipos que están dentro de una carpeta (según su ruta completa).
+create or replace function public.equipos_en_carpeta(p_id uuid)
+returns setof text
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_carpeta public.carpetas;
+  v_cat text;
+  v_sub text;
+begin
+  select * into v_carpeta from public.carpetas where id = p_id;
+  if not found then
+    return;
+  end if;
+
+  if v_carpeta.nivel = 2 then
+    select nombre into v_cat from public.carpetas where id = v_carpeta.parent_id;
+  elsif v_carpeta.nivel = 3 then
+    select padre.nombre, abuelo.nombre
+    into v_sub, v_cat
+    from public.carpetas padre
+    join public.carpetas abuelo on abuelo.id = padre.parent_id
+    where padre.id = v_carpeta.parent_id;
+  end if;
+
+  return query
+  select e.id
+  from public.equipos e
+  where case v_carpeta.nivel
+      when 1 then public.normalizar_carpeta(e.data ->> 'categoria') = v_carpeta.nombre
+      when 2 then public.normalizar_carpeta(e.data ->> 'categoria') = v_cat
+        and public.normalizar_carpeta(e.data ->> 'subcategoria') = v_carpeta.nombre
+      else public.normalizar_carpeta(e.data ->> 'categoria') = v_cat
+        and public.normalizar_carpeta(e.data ->> 'subcategoria') = v_sub
+        and public.normalizar_carpeta(e.data ->> 'subSubcategoria') = v_carpeta.nombre
+    end;
+end;
+$$;
+
+-- Renombra una carpeta y actualiza todos sus equipos en una sola transacción.
+create or replace function public.renombrar_carpeta(p_id uuid, p_nombre text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_carpeta public.carpetas;
+  v_nombre text := public.normalizar_carpeta(p_nombre);
+  v_equipos text[];
+begin
+  if not (select public.is_sigat_admin()) then
+    raise exception 'Solo un administrador puede renombrar carpetas.' using errcode = '42501';
+  end if;
+
+  select * into v_carpeta from public.carpetas where id = p_id for update;
+  if not found then
+    raise exception 'La carpeta no existe.';
+  end if;
+  if v_carpeta.nombre = v_nombre then
+    return;
+  end if;
+  if exists (
+    select 1 from public.carpetas
+    where parent_id is not distinct from v_carpeta.parent_id and nombre = v_nombre
+  ) then
+    raise exception 'Ya existe una carpeta "%" en este nivel.', v_nombre using errcode = '23505';
+  end if;
+
+  -- Los equipos se buscan antes de renombrar, porque su ruta usa el nombre actual.
+  select array_agg(id) into v_equipos from public.equipos_en_carpeta(p_id) as t(id);
+
+  update public.carpetas set nombre = v_nombre where id = p_id;
+
+  update public.equipos
+  set data = jsonb_set(data, array[public.campo_carpeta(v_carpeta.nivel)], to_jsonb(v_nombre))
+  where id = any(coalesce(v_equipos, '{}'));
+end;
+$$;
+
+-- Elimina una carpeta (y sus subcarpetas); sus equipos pasan a "GENERAL" en ese nivel.
+create or replace function public.eliminar_carpeta(p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_carpeta public.carpetas;
+  v_equipos text[];
+begin
+  if not (select public.is_sigat_admin()) then
+    raise exception 'Solo un administrador puede eliminar carpetas.' using errcode = '42501';
+  end if;
+
+  select * into v_carpeta from public.carpetas where id = p_id for update;
+  if not found then
+    return;
+  end if;
+  if v_carpeta.nombre = 'GENERAL' then
+    raise exception 'La carpeta GENERAL no se puede eliminar.';
+  end if;
+
+  select array_agg(id) into v_equipos from public.equipos_en_carpeta(p_id) as t(id);
+
+  -- El trigger crea las rutas "GENERAL" que necesiten los equipos movidos.
+  update public.equipos
+  set data = jsonb_set(data, array[public.campo_carpeta(v_carpeta.nivel)], to_jsonb('GENERAL'::text))
+  where id = any(coalesce(v_equipos, '{}'));
+
+  delete from public.carpetas where id = p_id;
+end;
+$$;
+
+alter table public.carpetas enable row level security;
+
+drop policy if exists "SIGAT accounts can read folders" on public.carpetas;
+create policy "SIGAT accounts can read folders"
+  on public.carpetas for select to authenticated
+  using ((select public.has_sigat_access()));
+
+-- Solo lectura directa; crear, renombrar y eliminar pasan por las funciones.
+revoke all on public.carpetas from anon, authenticated;
+grant select on public.carpetas to authenticated;
+
+revoke all on function public.ensure_carpeta_path(text, text, text) from public, anon, authenticated;
+revoke all on function public.sync_carpetas_equipo() from public, anon, authenticated;
+revoke all on function public.equipos_en_carpeta(uuid) from public, anon, authenticated;
+revoke all on function public.crear_carpeta(uuid, text) from public, anon;
+revoke all on function public.renombrar_carpeta(uuid, text) from public, anon;
+revoke all on function public.eliminar_carpeta(uuid) from public, anon;
+grant execute on function public.crear_carpeta(uuid, text) to authenticated;
+grant execute on function public.renombrar_carpeta(uuid, text) to authenticated;
+grant execute on function public.eliminar_carpeta(uuid) to authenticated;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'carpetas'
+  ) then
+    alter publication supabase_realtime add table public.carpetas;
+  end if;
+end;
+$$;
