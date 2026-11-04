@@ -1,41 +1,28 @@
-import { createContext, useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { ThemeContext } from "./theme";
 
-export const ThemeContext = createContext();
+const STORAGE_KEY = "appTheme";
+
+// Tema guardado en una visita anterior, o claro por defecto.
+const temaInicial = () => localStorage.getItem(STORAGE_KEY) || "light";
 
 export const ThemeProvider = ({ children }) => {
-const [theme, setTheme] = useState("light");
+  const [theme, setTheme] = useState(temaInicial);
 
-// 1. Al cargar la app, revisamos si el usuario ya había elegido un tema antes
-useEffect(() => {
-const storedTheme = localStorage.getItem("appTheme");
-if (storedTheme) {
-    setTheme(storedTheme);
-}
-}, []);
+  // Cada vez que el tema cambia, se aplica la clase en el HTML principal.
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    document.documentElement.classList.toggle("light", theme !== "dark");
+  }, [theme]);
 
-// 2. Cada vez que el tema cambia, inyectamos la clase en el HTML principal
-useEffect(() => {
-if (theme === "dark") {
-    document.documentElement.classList.add("dark");
-    document.documentElement.classList.remove("light");
-} else {
-    document.documentElement.classList.add("light");
-    document.documentElement.classList.remove("dark");
-}
-}, [theme]);
+  // Alterna entre claro y oscuro y recuerda la elección.
+  const toggleTheme = () => {
+    setTheme((prevTheme) => {
+      const newTheme = prevTheme === "light" ? "dark" : "light";
+      localStorage.setItem(STORAGE_KEY, newTheme);
+      return newTheme;
+    });
+  };
 
-// 3. Función para alternar entre claro y oscuro
-const toggleTheme = () => {
-setTheme((prevTheme) => {
-    const newTheme = prevTheme === "light" ? "dark" : "light";
-    localStorage.setItem("appTheme", newTheme);
-    return newTheme;
-});
-};
-
-return (
-<ThemeContext.Provider value={{ theme, toggleTheme }}>
-    {children}
-</ThemeContext.Provider>
-);
+  return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>;
 };

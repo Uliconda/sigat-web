@@ -3,7 +3,7 @@ import { useContext, useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../config/supabase";
 import { subscribeToEquipos } from "../services/supabaseData";
-import { ThemeContext } from "../context/ThemeContext"; 
+import { ThemeContext } from "../context/theme"; 
 import logo from '../assets/assets_buho.png'; 
 
 export default function Sidebar() {

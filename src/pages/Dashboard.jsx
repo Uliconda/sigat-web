@@ -7,7 +7,7 @@ import {
   updateEquipo,
 } from "../services/supabaseData";
 import { useAuth } from "../context/useAuth";
-import { ThemeContext } from "../context/ThemeContext"; 
+import { ThemeContext } from "../context/theme"; 
 import Sidebar from "../components/Sidebar";
 import emailjs from '@emailjs/browser';
 import Swal from 'sweetalert2'; 
