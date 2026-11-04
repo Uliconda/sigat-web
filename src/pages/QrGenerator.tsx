@@ -1,4 +1,4 @@
-// src/pages/QrGenerator.jsx
+// src/pages/QrGenerator.tsx
 import { useState, useRef } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 import Sidebar from "../components/Sidebar";
@@ -6,7 +6,7 @@ import "./QrGenerator.css";
 
 export default function QrGenerator() {
 const [equipmentId, setEquipmentId] = useState("");
-const qrRef = useRef(null); // Referencia para poder descargar la imagen
+const qrRef = useRef<HTMLDivElement>(null); // Referencia para poder descargar la imagen
 
 // Función para descargar el QR como imagen PNG
 const downloadQR = () => {
@@ -16,7 +16,7 @@ if (!equipmentId.trim()) {
 }
 
 // Buscamos el elemento "canvas" que genera la librería qrcode.react
-const canvas = qrRef.current.querySelector("canvas");
+const canvas = qrRef.current?.querySelector("canvas");
 if (canvas) {
     const pngUrl = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
     const downloadLink = document.createElement("a");
