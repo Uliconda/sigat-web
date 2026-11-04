@@ -318,7 +318,11 @@ export default function Inventory() {
         return;
       }
 
-      const datosHistorial = historial.map((data) => {
+      // Los cambios de carpetas (crear, renombrar, eliminar) van en su propia hoja.
+      const movimientosEquipos = historial.filter((data) => data.tipo !== "carpeta");
+      const cambiosCarpetas = historial.filter((data) => data.tipo === "carpeta");
+
+      const datosHistorial = movimientosEquipos.map((data) => {
 
         const fechaLegible = data.fecha
           ? new Date(data.fecha).toLocaleString("es-MX")
@@ -375,9 +379,21 @@ export default function Inventory() {
         };
       });
 
-      const worksheet = XLSX.utils.json_to_sheet(datosHistorial);
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, `Historial`);
+      if (datosHistorial.length > 0) {
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(datosHistorial), "Historial");
+      }
+      if (cambiosCarpetas.length > 0) {
+        const datosCarpetas = cambiosCarpetas.map((data) => ({
+          "Fecha y Hora": data.fecha ? new Date(data.fecha).toLocaleString("es-MX") : "Sin fecha",
+          "Acción efectuada": data.accion,
+          "Carpeta": data.carpeta,
+          "Equipos afectados": data.equiposAfectados ?? 0,
+          "Administrador": data.admin,
+          "Observaciones": data.observaciones,
+        }));
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(datosCarpetas), "Carpetas");
+      }
       XLSX.writeFile(workbook, nombreArchivo);
       
       Swal.fire("¡Descarga lista!", "El archivo Excel se ha generado correctamente.", "success");

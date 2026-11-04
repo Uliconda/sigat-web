@@ -600,6 +600,52 @@ delete from public.equipos
 where data ->> 'isTemplate' = 'true'
    or (data ->> 'estado' = 'SISTEMA' and lower(data ->> 'nombre') = 'plantilla sistema');
 
+-- Ruta legible de una carpeta, p. ej. "CÓMPUTO › LAPTOPS › DELL".
+create or replace function public.ruta_carpeta(p_id uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with recursive ruta as (
+    select id, parent_id, nombre, nivel from public.carpetas where id = p_id
+    union all
+    select c.id, c.parent_id, c.nombre, c.nivel
+    from public.carpetas c
+    join ruta r on c.id = r.parent_id
+  )
+  select string_agg(nombre, ' › ' order by nivel) from ruta;
+$$;
+
+-- Registra en el historial un cambio de carpetas. Se marca con tipo "carpeta"
+-- para que los reportes lo separen de los movimientos de equipos; el autor lo
+-- pone el trigger historial_stamp_author.
+create or replace function public.registrar_cambio_carpeta(
+  p_accion text,
+  p_ruta text,
+  p_observaciones text,
+  p_equipos integer default 0
+)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  insert into public.historial (data, fecha)
+  values (
+    jsonb_build_object(
+      'tipo', 'carpeta',
+      'fecha', now(),
+      'accion', p_accion,
+      'carpeta', p_ruta,
+      'equiposAfectados', p_equipos,
+      'observaciones', p_observaciones
+    ),
+    now()
+  );
+$$;
+
 -- Crea una carpeta vacía dentro de otra (o una categoría si p_parent_id es null).
 create or replace function public.crear_carpeta(p_parent_id uuid, p_nombre text)
 returns uuid
@@ -634,6 +680,12 @@ begin
   if v_id is null then
     raise exception 'Ya existe una carpeta "%" en este nivel.', v_nombre using errcode = '23505';
   end if;
+
+  perform public.registrar_cambio_carpeta(
+    'CARPETA CREADA',
+    public.ruta_carpeta(v_id),
+    'Carpeta vacía creada.'
+  );
   return v_id;
 end;
 $$;
@@ -691,6 +743,7 @@ declare
   v_carpeta public.carpetas;
   v_nombre text := public.normalizar_carpeta(p_nombre);
   v_equipos text[];
+  v_ruta_anterior text;
 begin
   if not (select public.is_sigat_admin()) then
     raise exception 'Solo un administrador puede renombrar carpetas.' using errcode = '42501';
@@ -712,12 +765,20 @@ begin
 
   -- Los equipos se buscan antes de renombrar, porque su ruta usa el nombre actual.
   select array_agg(id) into v_equipos from public.equipos_en_carpeta(p_id) as t(id);
+  v_ruta_anterior := public.ruta_carpeta(p_id);
 
   update public.carpetas set nombre = v_nombre where id = p_id;
 
   update public.equipos
   set data = jsonb_set(data, array[public.campo_carpeta(v_carpeta.nivel)], to_jsonb(v_nombre))
   where id = any(coalesce(v_equipos, '{}'));
+
+  perform public.registrar_cambio_carpeta(
+    'CARPETA RENOMBRADA',
+    public.ruta_carpeta(p_id),
+    format('Antes: %s. Equipos actualizados: %s.', v_ruta_anterior, coalesce(array_length(v_equipos, 1), 0)),
+    coalesce(array_length(v_equipos, 1), 0)
+  );
 end;
 $$;
 
@@ -731,6 +792,7 @@ as $$
 declare
   v_carpeta public.carpetas;
   v_equipos text[];
+  v_ruta text;
 begin
   if not (select public.is_sigat_admin()) then
     raise exception 'Solo un administrador puede eliminar carpetas.' using errcode = '42501';
@@ -745,6 +807,7 @@ begin
   end if;
 
   select array_agg(id) into v_equipos from public.equipos_en_carpeta(p_id) as t(id);
+  v_ruta := public.ruta_carpeta(p_id);
 
   -- El trigger crea las rutas "GENERAL" que necesiten los equipos movidos.
   update public.equipos
@@ -752,6 +815,13 @@ begin
   where id = any(coalesce(v_equipos, '{}'));
 
   delete from public.carpetas where id = p_id;
+
+  perform public.registrar_cambio_carpeta(
+    'CARPETA ELIMINADA',
+    v_ruta,
+    format('Equipos reasignados a GENERAL: %s.', coalesce(array_length(v_equipos, 1), 0)),
+    coalesce(array_length(v_equipos, 1), 0)
+  );
 end;
 $$;
 
@@ -769,6 +839,8 @@ grant select on public.carpetas to authenticated;
 revoke all on function public.ensure_carpeta_path(text, text, text) from public, anon, authenticated;
 revoke all on function public.sync_carpetas_equipo() from public, anon, authenticated;
 revoke all on function public.equipos_en_carpeta(uuid) from public, anon, authenticated;
+revoke all on function public.ruta_carpeta(uuid) from public, anon, authenticated;
+revoke all on function public.registrar_cambio_carpeta(text, text, text, integer) from public, anon, authenticated;
 revoke all on function public.crear_carpeta(uuid, text) from public, anon;
 revoke all on function public.renombrar_carpeta(uuid, text) from public, anon;
 revoke all on function public.eliminar_carpeta(uuid) from public, anon;
