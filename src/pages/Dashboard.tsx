@@ -1,4 +1,4 @@
-// src/pages/Dashboard.jsx
+// src/pages/Dashboard.tsx
 import { useState, useEffect, useContext } from "react"; 
 import {
   addHistorial,
@@ -11,15 +11,38 @@ import {
 import { useAuth } from "../context/useAuth";
 import { ThemeContext } from "../context/theme"; 
 import Sidebar from "../components/Sidebar";
-import Swal from 'sweetalert2'; 
+import Swal, { type SweetAlertOptions } from 'sweetalert2';
 import { mensajeDeError } from "../utils/errores";
 import { ESTADOS, esEstado, estaFuera } from "../constants/estados";
+import type { Equipo } from "../types";
 import "./Dashboard.css";
+
 import { 
   PieChart, Pie, Cell, 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line 
 } from "recharts";
+
+interface DatoGrafica {
+  name: string;
+  value: number;
+}
+
+interface ConteoCategoria {
+  categoria: string;
+  cantidad: number;
+}
+
+interface ConteoEquipo {
+  equipo: string;
+  prestamos: number;
+}
+
+interface ConteoHora {
+  hora: string;
+  cantidad: number;
+  num: number;
+}
 
 export default function Dashboard() {
   const { userData } = useAuth();
@@ -29,13 +52,13 @@ export default function Dashboard() {
   const [metrics, setMetrics] = useState({ 
     total: 0, disponibles: 0, prestados: 0, fueraDeServicio: 0, faltas: 0 
   });
-  const [prestadosList, setPrestadosList] = useState([]);
-  const [statusData, setStatusData] = useState([]);
-  const [categoryData, setCategoryData] = useState([]);
+  const [prestadosList, setPrestadosList] = useState<Equipo[]>([]);
+  const [statusData, setStatusData] = useState<DatoGrafica[]>([]);
+  const [categoryData, setCategoryData] = useState<ConteoCategoria[]>([]);
 
   // Estados de Estadísticas (Historial)
-  const [topEquipos, setTopEquipos] = useState([]);
-  const [horariosPico, setHorariosPico] = useState([]);
+  const [topEquipos, setTopEquipos] = useState<ConteoEquipo[]>([]);
+  const [horariosPico, setHorariosPico] = useState<ConteoHora[]>([]);
 
   const STATUS_COLORS = ["#2e7d32", "#c62828", "#616161", "#ad1457"];
 
@@ -74,7 +97,7 @@ export default function Dashboard() {
         { name: "Faltas", value: faltas }
       ]);
 
-      const catCounts = {};
+      const catCounts: Record<string, number> = {};
       equiposReales.forEach(equipo => {
         const cat = equipo.categoria || "General";
         catCounts[cat] = (catCounts[cat] || 0) + 1;
@@ -88,8 +111,8 @@ export default function Dashboard() {
   // 2. ESCUCHA DE ESTADÍSTICAS (Historial)
   useEffect(() => {
     const unsubscribe = subscribeToHistorial((historial) => {
-      const conteoEquipos = {};
-      const conteoHoras = {};
+      const conteoEquipos: Record<string, number> = {};
+      const conteoHoras: Record<string, number> = {};
 
       historial.forEach(data => {
         const esPrestamo = data.accion && (
@@ -128,10 +151,10 @@ export default function Dashboard() {
   // ver supabase/functions/notificaciones-prestamos y supabase/cron/alertas-prestamos.sql.
 
   // 3. FUNCIÓN MANEJO DE FALTAS MANUALES
-  const handleToggleFalta = async (item) => {
+  const handleToggleFalta = async (item: Equipo) => {
     const tieneFalta = esEstado(item.estado, ESTADOS.NO_RESPONDE);
     
-    const swalConfig = tieneFalta 
+    const swalConfig: SweetAlertOptions = tieneFalta
       ? { title: '¿Retirar Falta?', text: `Se quitará la marca de moroso a "${item.nombre}" y volverá a estar Prestado.`, icon: 'info', confirmButtonColor: '#28a745' }
       : { title: '¿Marcar Falta?', text: `Se enviará un correo automático de advertencia a quien tiene el equipo "${item.nombre}".`, icon: 'warning', confirmButtonColor: '#d33' };
 
@@ -160,7 +183,7 @@ export default function Dashboard() {
   };
 
   // --- NUEVO: FUNCIÓN SÓLO PARA REENVIAR CORREO ---
-  const handleResendEmail = async (item) => {
+  const handleResendEmail = async (item: Equipo) => {
     const result = await Swal.fire({
       title: '¿Reenviar correo de advertencia?',
       text: `Se enviará un recordatorio nuevamente por correo para "${item.nombre}".`,
@@ -276,7 +299,7 @@ export default function Dashboard() {
               <ResponsiveContainer>
                 <PieChart>
                   <Pie data={statusData} innerRadius={60} outerRadius={80} dataKey="value" nameKey="name">
-                    {statusData.map((e, i) => <Cell key={i} fill={STATUS_COLORS[i % STATUS_COLORS.length]}/>)}
+                    {statusData.map((_, i) => <Cell key={i} fill={STATUS_COLORS[i % STATUS_COLORS.length]}/>)}
                   </Pie>
                   <Tooltip />
                   <Legend />
