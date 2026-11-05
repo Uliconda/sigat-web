@@ -158,3 +158,13 @@ export async function notificarPrestamo(action: AccionNotificacion, equipoId?: s
   if (!data) throw new Error("La función no devolvió respuesta.");
   return data;
 }
+
+// Pide el correo de "restablecer contraseña". Lo envía la Edge Function
+// recuperar-contrasena con EmailJS; el enlace regresa a esta misma página.
+export async function solicitarRecuperacion(email: string): Promise<string> {
+  const { data, error } = await supabase.functions.invoke<{ mensaje: string }>("recuperar-contrasena", {
+    body: { email, redirectTo: window.location.origin },
+  });
+  if (error) throw await errorDeFuncion(error);
+  return data?.mensaje ?? "Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.";
+}

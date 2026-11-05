@@ -265,5 +265,36 @@ await db.query(`select public.update_equipo('ES-1', '{"estado":"prestado"}')`);
 check("update_equipo guarda el estado normalizado", (await estadoDe("ES-1")) === "Prestado");
 await as("");
 
+console.log("16. Límites de recuperación de contraseña");
+await as("");
+const solicitar = async (email, ip) =>
+  (await rows(`select public.registrar_solicitud_recuperacion($1, $2) as ok`, [email, ip]))[0].ok;
+check("la primera solicitud se permite", (await solicitar("Ana@Demo.mx", "10.0.0.1")) === true);
+check("otra en el mismo minuto se rechaza (sin importar mayúsculas)", (await solicitar(" ana@demo.mx ", "10.0.0.2")) === false);
+await db.exec(`update public.solicitudes_recuperacion set creada_en = creada_en - interval '2 minutes'`);
+check("pasado un minuto se vuelve a permitir", (await solicitar("ana@demo.mx", "10.0.0.1")) === true);
+for (let i = 0; i < 3; i++) {
+  await db.exec(`update public.solicitudes_recuperacion set creada_en = creada_en - interval '2 minutes'`);
+  await solicitar("ana@demo.mx", "10.0.0.1");
+}
+await db.exec(`update public.solicitudes_recuperacion set creada_en = creada_en - interval '2 minutes'`);
+check("la sexta en una hora se rechaza", (await solicitar("ana@demo.mx", "10.0.0.1")) === false);
+check("el correo se guarda como hash, no en claro",
+  (await rows(`select count(*)::int as n from public.solicitudes_recuperacion where email_hash like '%@%'`))[0].n === 0);
+for (let i = 0; i < 20; i++) await solicitar(`u${i}@demo.mx`, "10.9.9.9");
+check("más de 20 por hora desde una IP se rechazan", (await solicitar("otro@demo.mx", "10.9.9.9")) === false);
+await db.exec(`update public.solicitudes_recuperacion set creada_en = now() - interval '2 days'`);
+await solicitar("limpia@demo.mx", null);
+check("borra los intentos de más de un día",
+  (await rows(`select count(*)::int as n from public.solicitudes_recuperacion`))[0].n === 1);
+check("devuelve el nombre del perfil para el saludo",
+  (await rows(`select public.nombre_para_recuperacion(' ADMIN@sigat.mx ') as n`))[0].n === "Cuenta admin");
+await db.exec(`set role authenticated`);
+await expectError("una cuenta de la app no puede leer los intentos",
+  `select * from public.solicitudes_recuperacion`, [], /permission denied/);
+await expectError("ni consultar nombres por correo",
+  `select public.nombre_para_recuperacion('admin@sigat.mx')`, [], /permission denied/);
+await db.exec(`reset role`);
+
 console.log(`\n${passed} correctas, ${failed} fallidas`);
 process.exit(failed ? 1 : 0);

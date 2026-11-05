@@ -2,6 +2,7 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { supabase } from "../config/supabase";
 import {
+  solicitarRecuperacion,
   subscribeToProfiles,
   updateProfile,
 } from "../services/supabaseData";
@@ -157,10 +158,7 @@ if (formValues) {
 
     // ENVIAR CORREO SI EL CHECKBOX ESTÁ MARCADO
     if (formValues.resetPassword) {
-        const { error } = await supabase.auth.resetPasswordForEmail(usuario.email, {
-            redirectTo: window.location.origin,
-        });
-        if (error) throw error;
+        await solicitarRecuperacion(usuario.email);
         Swal.fire({ 
             icon: 'success', 
             title: '¡Actualizado!', 
