@@ -28,7 +28,8 @@ export interface PerfilRow {
 export interface EquipoData {
   nombre?: string;
   marca?: string;
-  numeroSerie?: string;
+  /** Número de serie (así lo guarda la app móvil). */
+  no_serie?: string;
   categoria?: string;
   subcategoria?: string;
   subSubcategoria?: string;

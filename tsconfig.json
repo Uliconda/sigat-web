@@ -1,6 +1,6 @@
 {
-  // TypeScript gradual: los archivos .ts/.tsx se revisan en modo estricto y
-  // los .jsx que aún no se migran (las páginas) conviven sin revisión de tipos.
+  // Todo el código de src es TypeScript estricto. Las pruebas (.test.mjs) las
+  // ejecuta Node directamente y no forman parte de esta revisión.
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
@@ -15,8 +15,6 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
 
-    "allowJs": true,
-    "checkJs": false,
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,

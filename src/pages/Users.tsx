@@ -1,5 +1,5 @@
-// src/pages/Users.jsx
-import { useState, useEffect } from "react";
+// src/pages/Users.tsx
+import { useState, useEffect, type FormEvent } from "react";
 import { supabase } from "../config/supabase";
 import {
   subscribeToProfiles,
@@ -10,20 +10,33 @@ import Swal from "sweetalert2";
 import { useAuth } from "../context/useAuth";
 import { escapeHtml } from "../utils/html";
 import { errorDeFuncion, mensajeDeError } from "../utils/errores";
+import type { Perfil, Rol } from "../types";
 import "./Users.css";
+
+interface NuevoUsuario {
+  nombre: string;
+  email: string;
+  password: string;
+  rol: Rol;
+}
+
+interface CambiosUsuario {
+  nombre: string;
+  rol: Rol;
+  resetPassword: boolean;
+}
+
+const USUARIO_VACIO: NuevoUsuario = { nombre: "", email: "", password: "", rol: "usuario" };
 
 export default function Users() {
 // EXTRAEMOS user (para el ID) Y userData (para el rol)
-const { user, userData } = useAuth(); 
-const [users, setUsers] = useState([]);
+const { user, userData } = useAuth();
+// La página es privada: siempre hay sesión. El id se usa para no editarse/borrarse a sí mismo.
+const miId = user?.id;
+const [users, setUsers] = useState<Perfil[]>([]);
 const [loading, setLoading] = useState(false);
 
-const [formData, setFormData] = useState({
-nombre: "",
-email: "",
-password: "",
-rol: "usuario"
-});
+const [formData, setFormData] = useState<NuevoUsuario>(USUARIO_VACIO);
 
 useEffect(() => {
 const unsubscribe = subscribeToProfiles(setUsers, (error) => {
@@ -32,7 +45,7 @@ const unsubscribe = subscribeToProfiles(setUsers, (error) => {
 return () => unsubscribe();
 }, []);
 
-const handleCreateUser = async (e) => {
+const handleCreateUser = async (e: FormEvent<HTMLFormElement>) => {
 e.preventDefault();
 setLoading(true);
 try {
@@ -55,7 +68,7 @@ try {
     showConfirmButton: false
     });
     
-    setFormData({ nombre: "", email: "", password: "", rol: "usuario" });
+    setFormData(USUARIO_VACIO);
 } catch (error) {
     console.error(error);
     Swal.fire('No se pudo crear la cuenta', mensajeDeError(error), 'error');
@@ -66,9 +79,9 @@ setLoading(false);
 // ==========================================
 // EDITAR USUARIO (SWEETALERT) CON CAMBIO DE CONTRASEÑA
 // ==========================================
-const handleEditUser = async (usuario) => {
+const handleEditUser = async (usuario: Perfil) => {
 // 1. Bloquear que el superadmin se edite a sí mismo
-if (userData?.rol === "superadmin" && usuario.id === user.id) {
+if (userData?.rol === "superadmin" && usuario.id === miId) {
     Swal.fire('Acción Bloqueada', 'Como Super Administrador no puedes editar tu propio perfil.', 'error');
     return;
 }
@@ -80,11 +93,11 @@ if (userData?.rol !== "superadmin" && usuario.rol === "superadmin") {
 }
 
 // Identificamos si el usuario se está editando a sí mismo (para el caso del admin)
-const isSelfEdit = usuario.id === user.id;
+const isSelfEdit = usuario.id === miId;
 // Un admin no puede cambiar su propio rol
 const canChangeRole = userData?.rol === "superadmin" || !isSelfEdit;
 
-const { value: formValues } = await Swal.fire({
+const { value: formValues } = await Swal.fire<CambiosUsuario>({
     title: 'Editar Usuario',
     html:
     `<div style="text-align: left;">
@@ -113,11 +126,12 @@ const { value: formValues } = await Swal.fire({
     showCancelButton: true,
     confirmButtonText: 'Guardar Cambios',
     cancelButtonText: 'Cancelar',
-    preConfirm: () => {
+    preConfirm: (): CambiosUsuario => {
+    const popup = Swal.getPopup();
     return {
-        nombre: document.getElementById('swal-input-nombre').value,
-        rol: document.getElementById('swal-input-rol').value,
-        resetPassword: document.getElementById('swal-input-reset').checked
+        nombre: popup?.querySelector<HTMLInputElement>('#swal-input-nombre')?.value ?? "",
+        rol: (popup?.querySelector<HTMLSelectElement>('#swal-input-rol')?.value ?? usuario.rol) as Rol,
+        resetPassword: popup?.querySelector<HTMLInputElement>('#swal-input-reset')?.checked ?? false,
     };
     }
 });
@@ -168,9 +182,9 @@ if (formValues) {
 // ==========================================
 // ELIMINAR USUARIO
 // ==========================================
-const handleDeleteUser = async (targetUser) => {
+const handleDeleteUser = async (targetUser: Perfil) => {
 // 1. Evitar que el usuario se borre a sí mismo
-if (targetUser.id === user.id) {
+if (targetUser.id === miId) {
     Swal.fire('Acción Bloqueada', 'Por seguridad, no puedes eliminar tu propia cuenta.', 'error');
     return;
 }
@@ -252,14 +266,14 @@ return (
                 <td className="centrado">
                     <div className="usuarios-acciones">
                     {/* Botón de Editar: Se oculta para el propio Super Admin */}
-                    {(userData?.rol === "admin" || userData?.rol === "superadmin") && !(userData?.rol === "superadmin" && u.id === user.id) && (
+                    {(userData?.rol === "admin" || userData?.rol === "superadmin") && !(userData?.rol === "superadmin" && u.id === miId) && (
                         <button type="button" onClick={() => handleEditUser(u)} className="usuarios-boton usuarios-boton--editar">
                         Editar
                         </button>
                     )}
 
                     {/* Botón de Eliminar condicionado por rol Y bloqueando la cuenta propia */}
-                    {u.id !== user.id && (userData?.rol === "superadmin" || (userData?.rol === "admin" && u.rol === "usuario")) && (
+                    {u.id !== miId && (userData?.rol === "superadmin" || (userData?.rol === "admin" && u.rol === "usuario")) && (
                         <button type="button" onClick={() => handleDeleteUser(u)} className="usuarios-boton usuarios-boton--borrar">
                         Borrar
                         </button>
@@ -310,7 +324,7 @@ return (
                 id="nuevo-rol"
                 className="usuarios-input"
                 value={formData.rol}
-                onChange={(e) => setFormData({ ...formData, rol: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, rol: e.target.value as Rol })}
             >
                 <option value="usuario">Usuario Normal</option>
                 {userData?.rol === "superadmin" && (
