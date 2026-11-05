@@ -6,6 +6,7 @@ import { getProfile, solicitarRecuperacion } from "../services/supabaseData";
 import { useAuth } from "../context/useAuth";
 import logo from "../assets/logo-buho.webp";
 import { errorDeFuncion, mensajeDeError } from "../utils/errores";
+import { MIN_CONTRASENA } from "../constants/contrasena";
 import "./Login.css";
 
 export default function Login() {
@@ -160,7 +161,7 @@ return (
 
     {mustChangePassword && (
         <div role="status" className="login__aviso login__aviso--exito">
-            Esta contraseña temporal debe cambiarse antes de continuar. Usa una contraseña nueva de al menos 12 caracteres.
+            Esta contraseña temporal debe cambiarse antes de continuar. Usa una contraseña nueva de al menos {MIN_CONTRASENA} caracteres.
         </div>
     )}
 
@@ -183,7 +184,7 @@ return (
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            minLength={12}
+            minLength={MIN_CONTRASENA}
             required
             className="login__input"
             autoComplete="new-password"
@@ -196,7 +197,7 @@ return (
             type="password"
             value={confirmNewPassword}
             onChange={(e) => setConfirmNewPassword(e.target.value)}
-            minLength={12}
+            minLength={MIN_CONTRASENA}
             required
             className="login__input"
             autoComplete="new-password"

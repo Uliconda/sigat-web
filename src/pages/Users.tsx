@@ -12,6 +12,7 @@ import { useAuth } from "../context/useAuth";
 import { escapeHtml } from "../utils/html";
 import { errorDeFuncion, mensajeDeError } from "../utils/errores";
 import type { Perfil, Rol } from "../types";
+import { MIN_CONTRASENA } from "../constants/contrasena";
 import "./Users.css";
 
 interface NuevoUsuario {
@@ -311,7 +312,7 @@ return (
             <label htmlFor="nuevo-password">Contraseña Provisional</label>
             <input
                 id="nuevo-password"
-                type="password" required minLength={8} className="usuarios-input"
+                type="password" required minLength={MIN_CONTRASENA} className="usuarios-input"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             />
