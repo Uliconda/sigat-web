@@ -30,6 +30,16 @@ interface OpcionesTabla<Fila, Salida> extends Omit<OpcionesSuscripcion<Fila, Sal
   filtrar?: (consulta: ConsultaTabla) => ConsultaTabla;
 }
 
+// Nombre único para cada canal de tiempo real. crypto.randomUUID solo existe en
+// contextos seguros (HTTPS o localhost): al abrir la web por la IP de la red
+// (http://192.168.x.x) no está disponible y el Dashboard quedaba en blanco.
+let canalesCreados = 0;
+function idCanal(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  canalesCreados += 1;
+  return `${Date.now().toString(36)}-${canalesCreados}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 // Una suscripción compartida por tabla: una sola conexión y cambios incrementales.
 function tablaEnTiempoReal<Fila extends object, Salida>(
   table: string,
@@ -44,7 +54,7 @@ function tablaEnTiempoReal<Fila extends object, Salida>(
     },
     conectar: (onCambio, onEstado) => {
       const channel = supabase
-        .channel(`${table}-cambios-${crypto.randomUUID()}`)
+        .channel(`${table}-cambios-${idCanal()}`)
         .on("postgres_changes", { event: "*", schema: "public", table }, (payload) =>
           onCambio(payload as unknown as CambioTiempoReal<Fila>)
         )
