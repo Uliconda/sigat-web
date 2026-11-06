@@ -120,6 +120,24 @@ hora. Los préstamos sin matrícula se marcan como falta y el historial indica q
 no se pudo enviar el correo. Cada préstamo nuevo reinicia su alerta
 automáticamente (trigger `equipos_reiniciar_alerta`).
 
+### Personal administrativo
+
+Aplica `supabase/migrations/20261106000000_personal_administrativo.sql` en el
+SQL Editor (o con `npx supabase db push`). Crea:
+
+- `personal_administrativo`: nombre, departamento, fecha de ingreso, fecha de
+  término y conducta en el uso del equipo (`Excelente`, `Buena`, `Regular`,
+  `Mala`). Lo consultan todas las cuentas; solo administradores dan de alta o
+  editan.
+- `asignaciones_equipo`: historial de qué equipo tuvo cada persona y cuándo.
+  Nadie lo escribe directamente: los triggers de `equipos` abren una asignación
+  cuando un equipo recibe `personal_id` y la cierran al devolverlo, darlo de
+  baja, reasignarlo o eliminarlo, venga el cambio de la app, la web o SQL.
+
+La app móvil los administra desde el menú › **Personal administrativo**, y en
+los equipos de la categoría ADMINISTRATIVOS el botón **Asignar** elige a la
+persona de esa lista.
+
 ### 7. Ejecutar y verificar
 
 ```bash
