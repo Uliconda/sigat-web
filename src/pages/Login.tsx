@@ -1,19 +1,22 @@
 // src/pages/Login.tsx
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../config/supabase";
-import { getProfile } from "../services/supabaseData";
+import { enlaceRecuperacion, supabase, terminarRecuperacion } from "../config/supabase";
+import { getProfile, solicitarRecuperacion } from "../services/supabaseData";
 import { useAuth } from "../context/useAuth";
 import logo from "../assets/logo-buho.webp";
 import { errorDeFuncion, mensajeDeError } from "../utils/errores";
+import { MIN_CONTRASENA } from "../constants/contrasena";
 import "./Login.css";
 
 export default function Login() {
 const [email, setEmail] = useState("");
 const [password, setPassword] = useState("");
-const [error, setError] = useState("");
+const [error, setError] = useState(enlaceRecuperacion.error ?? "");
+const [aviso, setAviso] = useState("");
 const [loading, setLoading] = useState(false);
-const [recovery, setRecovery] = useState(false);
+// Si se llegó desde el enlace del correo, se muestra directo el formulario de nueva contraseña.
+const [recovery, setRecovery] = useState(enlaceRecuperacion.pendiente);
 const [mustChangePassword, setMustChangePassword] = useState(false);
 const [resetMode, setResetMode] = useState(false);
 const [resetSent, setResetSent] = useState(false);
@@ -88,14 +91,11 @@ const handleResetPassword = async (e: FormEvent<HTMLFormElement>) => {
     setError("");
     setLoading(true);
     try {
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: window.location.origin,
-        });
-        if (resetError) throw resetError;
+        await solicitarRecuperacion(email);
         setResetSent(true);
     } catch (err) {
         console.error("Error al solicitar restablecimiento:", err);
-        setError("No se pudo enviar el correo de restablecimiento.");
+        setError(mensajeDeError(err, "No se pudo enviar el correo de restablecimiento."));
     } finally {
         setLoading(false);
     }
@@ -118,8 +118,19 @@ const handleNewPassword = async (e: FormEvent<HTMLFormElement>) => {
             setMustChangePassword(false);
             await refreshProfile();
         } else {
-            const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+            const { data: actualizado, error: updateError } = await supabase.auth.updateUser({ password: newPassword });
             if (updateError) throw updateError;
+            terminarRecuperacion();
+            setRecovery(false);
+            setNewPassword("");
+            setConfirmNewPassword("");
+            // Las cuentas que no son de administrador usan la app móvil: no tienen acceso al panel.
+            const perfil = await getProfile(actualizado.user.id);
+            if (perfil?.rol !== "admin" && perfil?.rol !== "superadmin") {
+                await supabase.auth.signOut();
+                setAviso("Tu contraseña se actualizó. Ya puedes iniciar sesión en la app móvil SIGAT.");
+                return;
+            }
         }
         setRecovery(false);
         setNewPassword("");
@@ -150,16 +161,17 @@ return (
 
     {mustChangePassword && (
         <div role="status" className="login__aviso login__aviso--exito">
-            Esta contraseña temporal debe cambiarse antes de continuar. Usa una contraseña nueva de al menos 12 caracteres.
+            Esta contraseña temporal debe cambiarse antes de continuar. Usa una contraseña nueva de al menos {MIN_CONTRASENA} caracteres.
         </div>
     )}
 
     {error && <div role="alert" className="login__aviso login__aviso--error">{error}</div>}
+    {aviso && <div role="status" className="login__aviso login__aviso--exito">{aviso}</div>}
 
     {resetSent && (
         <div role="status" className="login__aviso login__aviso--exito">
-            Si el correo está registrado, Supabase aceptó la solicitud. Revisa la bandeja de entrada y spam.
-            En el modo de prueba de Resend, el destinatario debe ser el correo verificado en Resend.
+            Si el correo está registrado, recibirás un enlace para crear una nueva contraseña.
+            Revisa tu bandeja de entrada y la carpeta de spam. El enlace vence en 1 hora.
         </div>
     )}
 
@@ -172,7 +184,7 @@ return (
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            minLength={12}
+            minLength={MIN_CONTRASENA}
             required
             className="login__input"
             autoComplete="new-password"
@@ -185,7 +197,7 @@ return (
             type="password"
             value={confirmNewPassword}
             onChange={(e) => setConfirmNewPassword(e.target.value)}
-            minLength={12}
+            minLength={MIN_CONTRASENA}
             required
             className="login__input"
             autoComplete="new-password"
@@ -268,11 +280,12 @@ return (
                 setResetMode(true);
                 setResetSent(false);
                 setError("");
+                setAviso("");
             }}
-            disabled={loading || !email}
+            disabled={loading}
             className="login__enlace"
         >
-            Restablecer contraseña
+            ¿Olvidaste tu contraseña?
         </button>
     )}
     </div>

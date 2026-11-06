@@ -30,6 +30,16 @@ interface OpcionesTabla<Fila, Salida> extends Omit<OpcionesSuscripcion<Fila, Sal
   filtrar?: (consulta: ConsultaTabla) => ConsultaTabla;
 }
 
+// Nombre único para cada canal de tiempo real. crypto.randomUUID solo existe en
+// contextos seguros (HTTPS o localhost): al abrir la web por la IP de la red
+// (http://192.168.x.x) no está disponible y el Dashboard quedaba en blanco.
+let canalesCreados = 0;
+function idCanal(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  canalesCreados += 1;
+  return `${Date.now().toString(36)}-${canalesCreados}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 // Una suscripción compartida por tabla: una sola conexión y cambios incrementales.
 function tablaEnTiempoReal<Fila extends object, Salida>(
   table: string,
@@ -44,7 +54,7 @@ function tablaEnTiempoReal<Fila extends object, Salida>(
     },
     conectar: (onCambio, onEstado) => {
       const channel = supabase
-        .channel(`${table}-cambios-${crypto.randomUUID()}`)
+        .channel(`${table}-cambios-${idCanal()}`)
         .on("postgres_changes", { event: "*", schema: "public", table }, (payload) =>
           onCambio(payload as unknown as CambioTiempoReal<Fila>)
         )
@@ -157,4 +167,14 @@ export async function notificarPrestamo(action: AccionNotificacion, equipoId?: s
   if (error) throw await errorDeFuncion(error);
   if (!data) throw new Error("La función no devolvió respuesta.");
   return data;
+}
+
+// Pide el correo de "restablecer contraseña". Lo envía la Edge Function
+// recuperar-contrasena con EmailJS; el enlace regresa a esta misma página.
+export async function solicitarRecuperacion(email: string): Promise<string> {
+  const { data, error } = await supabase.functions.invoke<{ mensaje: string }>("recuperar-contrasena", {
+    body: { email, redirectTo: window.location.origin },
+  });
+  if (error) throw await errorDeFuncion(error);
+  return data?.mensaje ?? "Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.";
 }

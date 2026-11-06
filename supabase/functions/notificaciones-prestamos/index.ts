@@ -11,6 +11,7 @@
 // (cesba-queretaro.edu.mx), HORAS_LIMITE_PRESTAMO (48).
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { allowedOrigins, getCorsHeaders, isOriginAllowed, jsonResponse } from "../_shared/cors.ts";
+import { enviarConEmailjs, faltanSecretosEmailjs } from "../_shared/emailjs.ts";
 
 type Equipo = {
   id: string;
@@ -45,26 +46,13 @@ export function correoDelAlumno(equipo: Equipo, dominio: string) {
   return `${matricula}@${dominio}`;
 }
 
-async function enviarCorreo(equipo: Equipo, correo: string) {
-  const response = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      service_id: env("EMAILJS_SERVICE_ID"),
-      template_id: env("EMAILJS_TEMPLATE_ID"),
-      user_id: env("EMAILJS_PUBLIC_KEY"),
-      accessToken: env("EMAILJS_PRIVATE_KEY"),
-      template_params: {
-        correo_destino: correo,
-        nombre_alumno: equipo.poseedor_actual || equipo.alumno_nombre || "Alumno",
-        nombre_equipo: equipo.nombre ?? "",
-        id_equipo: equipo.id_qr || equipo.id,
-      },
-    }),
+function enviarCorreo(equipo: Equipo, correo: string) {
+  return enviarConEmailjs(env("EMAILJS_TEMPLATE_ID"), {
+    correo_destino: correo,
+    nombre_alumno: equipo.poseedor_actual || equipo.alumno_nombre || "Alumno",
+    nombre_equipo: equipo.nombre ?? "",
+    id_equipo: equipo.id_qr || equipo.id,
   });
-  if (!response.ok) {
-    throw new Error(`EmailJS respondió ${response.status}: ${await response.text()}`);
-  }
 }
 
 async function registrarHistorial(
@@ -136,8 +124,7 @@ Deno.serve(async (request) => {
   const supabaseUrl = env("SUPABASE_URL");
   const anonKey = env("SUPABASE_ANON_KEY");
   const serviceRoleKey = env("SUPABASE_SERVICE_ROLE_KEY");
-  const faltantes = ["EMAILJS_SERVICE_ID", "EMAILJS_TEMPLATE_ID", "EMAILJS_PUBLIC_KEY", "EMAILJS_PRIVATE_KEY"]
-    .filter((name) => !env(name));
+  const faltantes = faltanSecretosEmailjs(["EMAILJS_TEMPLATE_ID"]);
   if (!supabaseUrl || !anonKey || !serviceRoleKey || faltantes.length) {
     console.error("Faltan secretos de la función:", faltantes.join(", ") || "variables de Supabase");
     return jsonResponse({ error: "La función no está configurada." }, 500, origin);

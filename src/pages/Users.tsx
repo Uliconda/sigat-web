@@ -2,6 +2,7 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { supabase } from "../config/supabase";
 import {
+  solicitarRecuperacion,
   subscribeToProfiles,
   updateProfile,
 } from "../services/supabaseData";
@@ -11,6 +12,7 @@ import { useAuth } from "../context/useAuth";
 import { escapeHtml } from "../utils/html";
 import { errorDeFuncion, mensajeDeError } from "../utils/errores";
 import type { Perfil, Rol } from "../types";
+import { MIN_CONTRASENA } from "../constants/contrasena";
 import "./Users.css";
 
 interface NuevoUsuario {
@@ -157,10 +159,7 @@ if (formValues) {
 
     // ENVIAR CORREO SI EL CHECKBOX ESTÁ MARCADO
     if (formValues.resetPassword) {
-        const { error } = await supabase.auth.resetPasswordForEmail(usuario.email, {
-            redirectTo: window.location.origin,
-        });
-        if (error) throw error;
+        await solicitarRecuperacion(usuario.email);
         Swal.fire({ 
             icon: 'success', 
             title: '¡Actualizado!', 
@@ -313,7 +312,7 @@ return (
             <label htmlFor="nuevo-password">Contraseña Provisional</label>
             <input
                 id="nuevo-password"
-                type="password" required minLength={8} className="usuarios-input"
+                type="password" required minLength={MIN_CONTRASENA} className="usuarios-input"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
             />

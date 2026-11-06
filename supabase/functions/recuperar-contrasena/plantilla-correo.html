@@ -1,0 +1,62 @@
+<!--
+  Plantilla "Restablecer contraseña" para EmailJS (Email Templates > Content > Edit content > Code).
+  Variables que envía la función recuperar-contrasena:
+    {{correo_destino}}  → va en "To Email" (Settings de la plantilla), no aquí
+    {{nombre_usuario}}  → nombre del perfil SIGAT, p. ej. "María López"
+    {{enlace}}          → enlace de un solo uso para crear la nueva contraseña
+    {{vigencia}}        → tiempo de validez del enlace, p. ej. "1 hora"
+  Asunto sugerido: Restablece tu contraseña de SIGAT
+  IMPORTANTE: el enlace va con TRES llaves ({{{enlace}}}) para que EmailJS no lo altere.
+-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:24px 0;font-family:Arial,Helvetica,sans-serif;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e4e4e7;">
+        <tr>
+          <td style="background:#FF6F00;padding:20px 28px;color:#ffffff;font-size:20px;font-weight:bold;">
+            SIGAT · Restablecer contraseña
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:28px;color:#27272a;font-size:15px;line-height:1.6;">
+            <p style="margin:0 0 16px;">Hola <strong>{{nombre_usuario}}</strong>,</p>
+            <p style="margin:0 0 24px;">
+              Recibimos una solicitud para restablecer la contraseña de tu cuenta de SIGAT.
+              Para crear una nueva, presiona el siguiente botón:
+            </p>
+
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
+              <tr>
+                <td style="border-radius:8px;background:#FF6F00;">
+                  <a href="{{{enlace}}}" target="_blank"
+                     style="display:inline-block;padding:14px 28px;color:#ffffff;font-size:16px;font-weight:bold;text-decoration:none;border-radius:8px;">
+                    Crear nueva contraseña
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:0 0 16px;color:#52525b;font-size:14px;">
+              El enlace es de un solo uso y vence en <strong>{{vigencia}}</strong>.
+              Si el botón no funciona, copia y pega esta dirección en tu navegador:
+            </p>
+            <p style="margin:0 0 24px;font-size:12px;word-break:break-all;color:#71717a;">{{{enlace}}}</p>
+
+            <p style="margin:0 0 24px;padding:12px 16px;background:#fff7ed;border-left:4px solid #FF6F00;border-radius:6px;color:#52525b;font-size:13px;">
+              Si tú no pediste este cambio, ignora este correo: tu contraseña actual seguirá funcionando.
+            </p>
+            <p style="margin:0;">
+              Atentamente,<br />
+              <strong>Departamento de Sistemas - CESBA</strong>
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:14px 28px;background:#fafafa;color:#a1a1aa;font-size:12px;border-top:1px solid #e4e4e7;">
+            Mensaje automático del Sistema de Gestión de Inventario (SIGAT).
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

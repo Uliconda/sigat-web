@@ -31,10 +31,23 @@ perfil administrador en `profiles`.
 
 ### 3. Configurar restablecimiento de contraseñas
 
-En **Authentication > URL Configuration**, agrega la URL donde correrá la app
-(por ejemplo `http://localhost:5173`) a las Redirect URLs permitidas. Las
-cuentas pueden recuperar el acceso con **Restablecer contraseña** en el inicio
-de sesión.
+El enlace de "¿Olvidaste tu contraseña?" lo genera Supabase Auth, pero el correo
+lo envía la Edge Function `recuperar-contrasena` con EmailJS (el SMTP de
+Supabase estaba en el modo de prueba de Resend, que solo entrega al dueño de la
+cuenta). La función responde igual exista o no el correo y limita los intentos
+(1 por minuto y 5 por hora por correo, 20 por hora por IP).
+
+1. **URLs permitidas:** están en `supabase/config.toml` (`[auth]`). Al publicar
+   la web en otro dominio, agrégalo ahí y en `APP_ORIGIN`, y ejecuta
+   `npx supabase config push` (solo envía lo que el archivo declara).
+2. **Plantilla:** en EmailJS crea una plantilla con
+   `supabase/functions/recuperar-contrasena/plantilla-correo.html`
+   (To Email: `{{correo_destino}}`) y pon su ID en `EMAILJS_TEMPLATE_RECUPERACION`.
+3. **Despliegue:** aplica las migraciones (`npx supabase db push`), carga los
+   secretos y ejecuta `npx supabase functions deploy recuperar-contrasena`.
+
+Los usuarios que no son administradores también pueden restablecer su
+contraseña desde la web; al terminar se les indica que entren en la app móvil.
 
 ### 4. Desplegar la función de gestión de cuentas
 

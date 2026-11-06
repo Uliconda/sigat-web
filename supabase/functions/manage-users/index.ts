@@ -1,6 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { allowedOrigins, getCorsHeaders, isOriginAllowed, jsonResponse } from "../_shared/cors.ts";
 
+// Igual que la web (src/constants/contrasena.ts), la app móvil y Supabase Auth.
+const MIN_CONTRASENA = 6;
+
 Deno.serve(async (request) => {
   const origin = request.headers.get("Origin") ?? "";
   if (!allowedOrigins().length) {
@@ -74,8 +77,8 @@ Deno.serve(async (request) => {
     if (!callerProfile?.must_change_password) {
       return jsonResponse({ error: "Esta cuenta no requiere cambio inicial de contraseña." }, 409, origin);
     }
-    if (!body.newPassword || body.newPassword.length < 12) {
-      return jsonResponse({ error: "La nueva contraseña debe tener al menos 12 caracteres." }, 400, origin);
+    if (!body.newPassword || body.newPassword.length < MIN_CONTRASENA) {
+      return jsonResponse({ error: `La nueva contraseña debe tener al menos ${MIN_CONTRASENA} caracteres.` }, 400, origin);
     }
 
     const { error: passwordError } = await adminClient.auth.admin.updateUserById(
@@ -119,8 +122,8 @@ Deno.serve(async (request) => {
     if (!email || !nombre || !password || !rol || !["usuario", "admin", "superadmin"].includes(rol)) {
       return jsonResponse({ error: "Faltan datos válidos para crear la cuenta." }, 400, origin);
     }
-    if (password.length < 8) {
-      return jsonResponse({ error: "La contraseña debe tener al menos 8 caracteres." }, 400, origin);
+    if (password.length < MIN_CONTRASENA) {
+      return jsonResponse({ error: `La contraseña debe tener al menos ${MIN_CONTRASENA} caracteres.` }, 400, origin);
     }
     if (rol === "superadmin" && callerProfile.rol !== "superadmin") {
       return jsonResponse({ error: "Solo un superadministrador puede crear otro superadministrador." }, 403, origin);
