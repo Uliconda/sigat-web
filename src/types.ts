@@ -40,6 +40,8 @@ export interface EquipoData {
   alumno_matricula?: string;
   matricula?: string;
   poseedor_actual?: string;
+  /** Persona de personal_administrativo que tiene el equipo (null = nadie). */
+  personal_id?: string | null;
   fecha_prestamo?: string;
   fecha_revision?: string;
   observacion_revision?: string;
