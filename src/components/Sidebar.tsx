@@ -12,6 +12,7 @@ const MENU = [
   { name: "Inventario", path: "/inventario", icon: "📦" },
   { name: "Usuarios", path: "/usuarios", icon: "👥" },
   { name: "Mantenimiento", path: "/mantenimiento", icon: "🛠️" },
+  { name: "Personal Administrativo", path: "/personal", icon: "🗂️" },
 ];
 
 const DIAS_MANTENIMIENTO = 90;

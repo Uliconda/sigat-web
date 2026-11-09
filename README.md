@@ -134,9 +134,19 @@ SQL Editor (o con `npx supabase db push`). Crea:
   cuando un equipo recibe `personal_id` y la cierran al devolverlo, darlo de
   baja, reasignarlo o eliminarlo, venga el cambio de la app, la web o SQL.
 
+Después aplica `supabase/migrations/20261107000000_eliminar_personal.sql`. Agrega
+la función `eliminar_personal(p_id)`, que usan los administradores para borrar
+para siempre a una persona junto con su historial de asignaciones. No se permite
+mientras la persona tenga equipo asignado.
+
 La app móvil los administra desde el menú › **Personal administrativo**, y en
 los equipos de la categoría ADMINISTRATIVOS el botón **Asignar** elige a la
 persona de esa lista.
+
+En la web, el menú › **Personal Administrativo** muestra al personal agrupado
+por departamento con su equipo actual e historial, y genera un reporte PDF de
+una, varias o todas las áreas (opcionalmente con el historial de equipos y el
+personal que ya no labora).
 
 ### 7. Ejecutar y verificar
 

@@ -11,6 +11,7 @@ const Inventory = lazy(() => import("./pages/Inventory"));
 const Users = lazy(() => import("./pages/Users"));
 const QrGenerator = lazy(() => import("./pages/QrGenerator"));
 const Maintenance = lazy(() => import("./pages/Maintenance"));
+const Personal = lazy(() => import("./pages/Personal"));
 
 const privada = (pagina: ReactNode) => <ProtectedRoute>{pagina}</ProtectedRoute>;
 
@@ -28,6 +29,7 @@ function App() {
           <Route path="/usuarios" element={privada(<Users />)} />
           <Route path="/qr" element={privada(<QrGenerator />)} />
           <Route path="/mantenimiento" element={privada(<Maintenance />)} />
+          <Route path="/personal" element={privada(<Personal />)} />
 
           {/* Cualquier otra URL vuelve al inicio. */}
           <Route path="*" element={<Navigate to="/" replace />} />

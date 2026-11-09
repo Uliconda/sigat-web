@@ -8,6 +8,7 @@ import {
 } from "../services/supabaseData";
 import { useAuth } from "../context/useAuth";
 import Sidebar from "../components/Sidebar";
+import { DialogoReporteInventario } from "../components/DialogoReporteInventario";
 
 
 import QRCode from "qrcode";
@@ -26,6 +27,7 @@ export default function Inventory() {
   const [reportType, setReportType] = useState("all"); 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [reporteAbierto, setReporteAbierto] = useState(false);
 
   const { userData } = useAuth();
 
@@ -40,14 +42,20 @@ export default function Inventory() {
   }, []);
 
   // FILTRADO DE EQUIPOS Y OCULTAMIENTO DE PLANTILLAS
-  const filteredEquipos = equipos.filter((item) => {
-    if (item.isTemplate || item.nombre === "Plantilla Sistema") return false;
+  // ORDEN ASCENDENTE POR ID (001, 002, ... 010, 100). "numeric" compara los
+  // números por su valor, así "010" va después de "009" y no después de "001".
+  const filteredEquipos = equipos
+    .filter((item) => {
+      if (item.isTemplate || item.nombre === "Plantilla Sistema") return false;
 
-    return (
-      (item.nombre || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.id || "").toLowerCase().includes(searchTerm.toLowerCase())
+      return (
+        (item.nombre || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.id || "").toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    })
+    .sort((a, b) =>
+      (a.id || "").localeCompare(b.id || "", "es", { numeric: true, sensitivity: "base" })
     );
-  });
 
   // ==========================================
   // 2. FUNCIÓN PARA CAMBIAR ESTADO NORMAL
@@ -413,173 +421,6 @@ export default function Inventory() {
     }
   };
 
-// ==========================================
-  // 7. FUNCIÓN PARA EXPORTAR A PDF (CON SELECTOR AGRUPADO ORDENADO)
-  // ==========================================
-  const exportToPDF = async () => {
-    // Grupo → { valor: texto } para el selector de SweetAlert.
-    const inputOptions: Record<string, Record<string, string>> = {
-      "General": {
-        "Todo": "🌟 Todo el inventario (Completo)"
-      }
-    };
-    
-    // ✨ LA SOLUCIÓN: Ordenamos el inventario jerárquicamente antes de agrupar.
-    // Esto asegura que cada hijo se inserte justo después de su padre.
-    const equiposOrdenados = [...equipos].sort((a, b) => {
-      const catA = (a.categoria || "").toUpperCase();
-      const catB = (b.categoria || "").toUpperCase();
-      if (catA !== catB) return catA.localeCompare(catB);
-
-      const subA = (a.subcategoria || "").toUpperCase();
-      const subB = (b.subcategoria || "").toUpperCase();
-      if (subA !== subB) return subA.localeCompare(subB);
-
-      const subSubA = (a.subSubcategoria || "").toUpperCase();
-      const subSubB = (b.subSubcategoria || "").toUpperCase();
-      return subSubA.localeCompare(subSubB);
-    });
-
-    // Usamos el nuevo arreglo "equiposOrdenados" en lugar del original
-    equiposOrdenados.forEach(item => {
-      if (item.isTemplate || item.nombre?.toLowerCase() === "plantilla sistema") return;
-      
-      const cat = item.categoria;
-      const sub = item.subcategoria;
-      const subSub = item.subSubcategoria;
-
-      if (cat) {
-        // 1. Nivel Categoría
-        if (!inputOptions[cat]) {
-          inputOptions[cat] = {};
-          inputOptions[cat][cat] = `📁 ${cat} (Completo)`;
-        }
-        
-        // 2. Nivel Subcategoría
-        if (sub && sub.toUpperCase() !== "GENERAL") {
-          const claveSub = `${cat}|${sub}`;
-          if (!inputOptions[cat][claveSub]) {
-            inputOptions[cat][claveSub] = ` ↳ ${cat} solo ${sub}`;
-          }
-          
-          // 3. Nivel Sub-Subcategoría
-          if (subSub && subSub.toUpperCase() !== "GENERAL") {
-            const claveSubSub = `${cat}|${sub}|${subSub}`;
-            if (!inputOptions[cat][claveSubSub]) {
-              inputOptions[cat][claveSubSub] = `    • ${sub} > solo ${subSub}`;
-            }
-          }
-        }
-      }
-    });
-
-    const { value: seleccion } = await Swal.fire({
-      title: 'Generar PDF',
-      text: '¿Qué información deseas incluir en el reporte?',
-      icon: 'question',
-      input: 'select',
-      inputOptions: inputOptions,
-      inputPlaceholder: 'Selecciona una opción',
-      showCancelButton: true,
-      confirmButtonText: 'Generar',
-      cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#d32f2f',
-      inputValidator: (value) => {
-        if (!value) return 'Debes seleccionar una opción';
-      }
-    });
-
-    if (!seleccion) return;
-
-    let equiposAExportar = filteredEquipos;
-    let tituloSecundario = "";
-
-    if (seleccion !== "Todo") {
-      const parts = seleccion.split("|");
-      
-      if (parts.length === 3) {
-        equiposAExportar = filteredEquipos.filter(item => item.categoria === parts[0] && item.subcategoria === parts[1] && item.subSubcategoria === parts[2]);
-        tituloSecundario = `${parts[0]} > ${parts[1]} > ${parts[2]}`;
-      } 
-      else if (parts.length === 2) {
-        equiposAExportar = filteredEquipos.filter(item => item.categoria === parts[0] && item.subcategoria === parts[1]);
-        tituloSecundario = `${parts[0]} > ${parts[1]}`;
-      } 
-      else {
-        equiposAExportar = filteredEquipos.filter(item => item.categoria === parts[0]);
-        tituloSecundario = `${parts[0]} (Completo)`;
-      }
-    }
-
-    if (equiposAExportar.length === 0) {
-      Swal.fire("Sin datos", "No se encontraron equipos para esta selección.", "info");
-      return;
-    }
-
-    // jsPDF se carga solo al exportar para no aumentar la carga inicial.
-    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
-      import("jspdf"),
-      import("jspdf-autotable"),
-    ]);
-    const doc = new jsPDF("landscape");
-    
-    const tituloPDF = seleccion === "Todo" 
-      ? "Estado Actual del Inventario - SIGAT (Completo)"
-      : `Reporte de Inventario - ${tituloSecundario}`;
-
-    doc.text(tituloPDF, 14, 15);
-
-    // 1. Añadimos "No. Serie" a los encabezados
-    const tableColumn = [
-      "ID", 
-      "Nombre / Modelo", 
-      "No. Serie", // 👈 Nueva columna agregada
-      "Categoría", 
-      "Sub.", 
-      "Sub-Sub", 
-      "Estado", 
-      "Usuario", 
-      "Poseedor"
-    ];
-    
-    // 2. Extraemos el número de serie de los datos del equipo
-    const tableRows = equiposAExportar.map((item) => {
-      const estadoActual = item.estado ? item.estado.toUpperCase() : "DISPONIBLE";
-      const poseedor = item.alumno_nombre || (estadoActual === "DISPONIBLE" ? "En almacén" : "Sin asignar");
-
-      return [
-        item.id, 
-        item.nombre, 
-        item.no_serie || "---",
-        item.categoria || "---", 
-        item.subcategoria || "---", 
-        item.subSubcategoria || "---", 
-        item.estado ?? "---",
-        item.usuarioActual || "---",
-        poseedor,
-      ].map((valor) => String(valor ?? "---"));
-    });
-
-    autoTable(doc, {
-      head: [tableColumn], 
-      body: tableRows, 
-      startY: 20, 
-      theme: "grid", 
-      headStyles: { fillColor: "#ff6600", textColor: "#fff" },
-      styles: { fontSize: 7.5, overflow: "linebreak" }, 
-      columnStyles: {
-        // 3. ¡Importante! Cambiamos el índice a 8, porque ahora "Poseedor" es la columna número 8 (empezando desde el 0)
-        8: { cellWidth: 50 } 
-      }
-    });
-    
-    const nombreArchivo = seleccion === "Todo" 
-      ? "Inventario_Completo_SIGAT.pdf" 
-      : `Inventario_${seleccion.replace(/\|/g, '_').replace(/\s+/g, '')}_SIGAT.pdf`;
-      
-    doc.save(nombreArchivo);
-  };
-
   return (
     <div className="app-layout">
       <Sidebar />
@@ -616,7 +457,7 @@ export default function Inventory() {
               </button>
             </div>
 
-            <button type="button" onClick={exportToPDF} className="inventario-boton inventario-boton--pdf">📄 PDF Vista Actual</button>
+            <button type="button" onClick={() => setReporteAbierto(true)} className="inventario-boton inventario-boton--pdf">📄 Generar reporte PDF</button>
             <button type="button" onClick={exportForPTouch} className="inventario-boton inventario-boton--ptouch">
               🖨️ Exportar Base de datos
             </button>
@@ -684,6 +525,14 @@ export default function Inventory() {
           )}
         </div>
       </main>
+
+      {reporteAbierto && (
+        <DialogoReporteInventario
+          equipos={filteredEquipos}
+          busqueda={searchTerm}
+          onCerrar={() => setReporteAbierto(false)}
+        />
+      )}
     </div>
   );
 }
