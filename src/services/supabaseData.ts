@@ -1,6 +1,7 @@
 import { supabase } from "../config/supabase";
 import type {
   AccionNotificacion,
+  Asignacion,
   Equipo,
   EquipoData,
   EquipoRow,
@@ -9,6 +10,7 @@ import type {
   HistorialRow,
   Perfil,
   PerfilRow,
+  Personal,
   ResultadoNotificacion,
   Rol,
 } from "../types";
@@ -94,6 +96,17 @@ export const subscribeToHistorial = tablaEnTiempoReal<HistorialRow, Historial>("
 export const subscribeToProfiles = tablaEnTiempoReal<PerfilRow, Perfil>("profiles", {
   columnas: COLUMNAS_PERFIL,
   mapear: mapProfile,
+});
+
+// Personal administrativo y su historial de equipos (lo escriben la app móvil y
+// los triggers de equipos; la web solo los consulta).
+export const subscribeToPersonal = tablaEnTiempoReal<Personal, Personal>("personal_administrativo", {
+  columnas: "id, nombre, departamento, fecha_ingreso, fecha_termino, conducta, conducta_notas",
+});
+
+export const subscribeToAsignaciones = tablaEnTiempoReal<Asignacion, Asignacion>("asignaciones_equipo", {
+  columnas:
+    "id, personal_id, equipo_id, equipo_nombre, fecha_inicio, fecha_fin, asignado_por, recibido_por, condicion_devolucion, observaciones, origen",
 });
 
 export async function getEquipos(): Promise<Equipo[]> {

@@ -143,6 +143,11 @@ La app móvil los administra desde el menú › **Personal administrativo**, y e
 los equipos de la categoría ADMINISTRATIVOS el botón **Asignar** elige a la
 persona de esa lista.
 
+En la web, el menú › **Personal Administrativo** muestra al personal agrupado
+por departamento con su equipo actual e historial, y genera un reporte PDF de
+una, varias o todas las áreas (opcionalmente con el historial de equipos y el
+personal que ya no labora).
+
 ### 7. Ejecutar y verificar
 
 ```bash

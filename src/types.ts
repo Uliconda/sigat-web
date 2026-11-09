@@ -93,3 +93,32 @@ export interface ResultadoNotificacion {
 }
 
 export type AccionNotificacion = "marcar-falta" | "reenviar-correo" | "revisar-vencidos";
+
+/** Conducta respecto al uso del equipo (restricción en Supabase). */
+export type Conducta = "Excelente" | "Buena" | "Regular" | "Mala";
+
+/** Fila de personal_administrativo. Fechas en formato AAAA-MM-DD. */
+export interface Personal {
+  id: string;
+  nombre: string;
+  departamento: string | null;
+  fecha_ingreso: string | null;
+  fecha_termino: string | null;
+  conducta: Conducta | null;
+  conducta_notas: string | null;
+}
+
+/** Fila de asignaciones_equipo (fecha_fin null = la persona aún lo tiene). */
+export interface Asignacion {
+  id: string;
+  personal_id: string;
+  equipo_id: string;
+  equipo_nombre: string | null;
+  fecha_inicio: string;
+  fecha_fin: string | null;
+  asignado_por: string | null;
+  recibido_por: string | null;
+  condicion_devolucion: string | null;
+  observaciones: string | null;
+  origen: string;
+}
