@@ -1,5 +1,5 @@
 // src/pages/Dashboard.tsx
-import { useState, useEffect, useContext } from "react"; 
+import { useState, useEffect, useContext, type CSSProperties, type ReactNode } from "react";
 import {
   addHistorial,
   DIAS_HISTORIAL_DASHBOARD,
@@ -9,7 +9,7 @@ import {
   updateEquipo,
 } from "../services/supabaseData";
 import { useAuth } from "../context/useAuth";
-import { ThemeContext } from "../context/theme"; 
+import { ThemeContext } from "../context/theme";
 import Sidebar from "../components/Sidebar";
 import Swal, { type SweetAlertOptions } from 'sweetalert2';
 import { mensajeDeError } from "../utils/errores";
@@ -17,16 +17,10 @@ import { ESTADOS, esEstado, estaFuera } from "../constants/estados";
 import type { Equipo } from "../types";
 import "./Dashboard.css";
 
-import { 
-  PieChart, Pie, Cell, 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  LineChart, Line 
+import {
+  PieChart, Pie, Cell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-
-interface DatoGrafica {
-  name: string;
-  value: number;
-}
 
 interface ConteoCategoria {
   categoria: string;
@@ -41,69 +35,99 @@ interface ConteoEquipo {
 interface ConteoHora {
   hora: string;
   cantidad: number;
-  num: number;
+}
+
+type ClaveEstado = "disponibles" | "prestados" | "faltas" | "fueraDeServicio";
+
+// Un solo lugar para el nombre, color e ícono de cada estado: así las tarjetas,
+// la dona y las etiquetas de la tabla usan siempre el mismo color.
+const ESTADOS_DASHBOARD: { clave: ClaveEstado; etiqueta: string; icono: string; color: string }[] = [
+  { clave: "disponibles", etiqueta: "Disponibles", icono: "✅", color: "#2e7d32" },
+  { clave: "prestados", etiqueta: "Prestados", icono: "🔄", color: "#ef6c00" },
+  { clave: "faltas", etiqueta: "Con falta", icono: "⚠️", color: "#ad1457" },
+  { clave: "fueraDeServicio", etiqueta: "Fuera de servicio", icono: "🔧", color: "#757575" },
+];
+
+// Estilos comunes para que todas las gráficas se lean igual en modo claro y oscuro.
+const EJE_TICK = { fill: "var(--text-muted)", fontSize: 12 };
+const EJE_LINEA = { stroke: "var(--border-color)" };
+const TOOLTIP_PROPS = {
+  contentStyle: {
+    backgroundColor: "var(--card-bg)",
+    border: "1px solid var(--border-color)",
+    borderRadius: 10,
+    color: "var(--text-color)",
+  },
+  labelStyle: { color: "var(--text-color)", fontWeight: 600 },
+  itemStyle: { color: "var(--text-color)" },
+  cursor: { fill: "var(--hover-bg)" },
+};
+
+const recortar = (texto: string, max = 18) => (texto.length > max ? `${texto.slice(0, max - 1)}…` : texto);
+const porcentaje = (parte: number, total: number) => (total > 0 ? Math.round((parte / total) * 100) : 0);
+
+function GraficaVacia({ children }: { children: ReactNode }) {
+  return <div className="dashboard-vacio">{children}</div>;
 }
 
 export default function Dashboard() {
   const { userData } = useAuth();
-  const { theme, toggleTheme } = useContext(ThemeContext); 
+  const { theme, toggleTheme } = useContext(ThemeContext);
 
   // Estados de Métricas e Inventario
-  const [metrics, setMetrics] = useState({ 
-    total: 0, disponibles: 0, prestados: 0, fueraDeServicio: 0, faltas: 0 
+  const [metrics, setMetrics] = useState<Record<ClaveEstado | "total", number>>({
+    total: 0, disponibles: 0, prestados: 0, fueraDeServicio: 0, faltas: 0
   });
+  const [cargando, setCargando] = useState(true);
   const [prestadosList, setPrestadosList] = useState<Equipo[]>([]);
-  const [statusData, setStatusData] = useState<DatoGrafica[]>([]);
   const [categoryData, setCategoryData] = useState<ConteoCategoria[]>([]);
 
   // Estados de Estadísticas (Historial)
   const [topEquipos, setTopEquipos] = useState<ConteoEquipo[]>([]);
   const [horariosPico, setHorariosPico] = useState<ConteoHora[]>([]);
 
-  const STATUS_COLORS = ["#2e7d32", "#c62828", "#616161", "#ad1457"];
-
-// 1. ESCUCHA DE INVENTARIO (Equipos)
+  // 1. ESCUCHA DE INVENTARIO (Equipos)
   useEffect(() => {
     const unsubscribe = subscribeToEquipos((docs) => {
-      
+
       // Filtramos para quedarnos ÚNICAMENTE con los equipos reales
-      const equiposReales = docs.filter(item => 
+      const equiposReales = docs.filter(item =>
         !item.isTemplate && item.nombre?.toLowerCase() !== "plantilla sistema"
       );
-      
+
       const disponibles = equiposReales.filter(i => esEstado(i.estado, ESTADOS.DISPONIBLE)).length;
-      const prestados = equiposReales.filter(i => 
+      const prestados = equiposReales.filter(i =>
         esEstado(i.estado, ESTADOS.PRESTADO, ESTADOS.SIN_ENTREGAR)
       ).length;
       const fueraDeServicio = equiposReales.filter(i => esEstado(i.estado, ESTADOS.FUERA_DE_SERVICIO)).length;
       const faltas = equiposReales.filter(i => esEstado(i.estado, ESTADOS.NO_RESPONDE)).length;
-      
+
       setMetrics({ total: equiposReales.length, disponibles, prestados, fueraDeServicio, faltas });
+      setCargando(false);
 
-      // 👇 AQUÍ ESTÁ EL CAMBIO: Filtramos por estado y EXCLUIMOS a los ADMINISTRATIVOS
-      const equiposFuera = equiposReales.filter(i => {
-        const esPrestado = estaFuera(i.estado);
-        const noEsAdministrativo = i.categoria?.toUpperCase() !== "ADMINISTRATIVOS";
-        
-        return esPrestado && noEsAdministrativo; 
-      });
-      
+      // Equipos que alguien tiene, sin contar los ADMINISTRATIVOS.
+      // Las faltas van primero porque son las que requieren atención.
+      const equiposFuera = equiposReales
+        .filter(i => estaFuera(i.estado) && i.categoria?.toUpperCase() !== "ADMINISTRATIVOS")
+        .sort((a, b) =>
+          Number(esEstado(b.estado, ESTADOS.NO_RESPONDE)) - Number(esEstado(a.estado, ESTADOS.NO_RESPONDE))
+        );
       setPrestadosList(equiposFuera);
-
-      setStatusData([
-        { name: "Disponibles", value: disponibles },
-        { name: "Prestados", value: prestados },
-        { name: "Fuera de Servicio", value: fueraDeServicio },
-        { name: "Faltas", value: faltas }
-      ]);
 
       const catCounts: Record<string, number> = {};
       equiposReales.forEach(equipo => {
         const cat = equipo.categoria || "General";
         catCounts[cat] = (catCounts[cat] || 0) + 1;
       });
-      setCategoryData(Object.keys(catCounts).map(key => ({ categoria: key, cantidad: catCounts[key] })));
-    }, (error) => console.error("Error al cargar equipos desde Supabase:", error));
+      setCategoryData(
+        Object.keys(catCounts)
+          .map(key => ({ categoria: key, cantidad: catCounts[key] }))
+          .sort((a, b) => b.cantidad - a.cantidad)
+      );
+    }, (error) => {
+      console.error("Error al cargar equipos desde Supabase:", error);
+      setCargando(false);
+    });
 
     return () => unsubscribe();
   }, []);
@@ -112,35 +136,44 @@ export default function Dashboard() {
   useEffect(() => {
     const unsubscribe = subscribeToHistorial((historial) => {
       const conteoEquipos: Record<string, number> = {};
-      const conteoHoras: Record<string, number> = {};
+      const conteoHoras: Record<number, number> = {};
 
       historial.forEach(data => {
-        const esPrestamo = data.accion && (
-            data.accion.toLowerCase().includes("préstamo") || 
-            data.accion.toLowerCase().includes("prestamo")
-        );
+        const accion = data.accion?.toLowerCase() ?? "";
+        if (!accion.includes("préstamo") && !accion.includes("prestamo")) return;
 
-        if (esPrestamo) {
-          const nombre = data.nombreEquipo || "Desconocido";
-          conteoEquipos[nombre] = (conteoEquipos[nombre] || 0) + 1;
+        const nombre = data.nombreEquipo || "Desconocido";
+        conteoEquipos[nombre] = (conteoEquipos[nombre] || 0) + 1;
 
-          if (data.fecha) {
-            const dateObj = new Date(data.fecha);
-            const hora = `${dateObj.getHours()}:00`;
+        if (data.fecha) {
+          const fecha = new Date(data.fecha);
+          if (!Number.isNaN(fecha.getTime())) {
+            const hora = fecha.getHours();
             conteoHoras[hora] = (conteoHoras[hora] || 0) + 1;
           }
         }
       });
 
-      const top = Object.keys(conteoEquipos)
-        .map(key => ({ equipo: key, prestamos: conteoEquipos[key] }))
-        .sort((a, b) => b.prestamos - a.prestamos).slice(0, 5);
-      setTopEquipos(top);
+      setTopEquipos(
+        Object.keys(conteoEquipos)
+          .map(key => ({ equipo: key, prestamos: conteoEquipos[key] }))
+          .sort((a, b) => b.prestamos - a.prestamos)
+          .slice(0, 5)
+      );
 
-      const horas = Object.keys(conteoHoras)
-        .map(key => ({ hora: key, cantidad: conteoHoras[key], num: parseInt(key) }))
-        .sort((a, b) => a.num - b.num);
-      setHorariosPico(horas);
+      // Se rellenan las horas sin préstamos con 0 para que la gráfica no "salte" horas.
+      const horasConDatos = Object.keys(conteoHoras).map(Number);
+      if (horasConDatos.length === 0) {
+        setHorariosPico([]);
+      } else {
+        const desde = Math.min(...horasConDatos);
+        const hasta = Math.max(...horasConDatos);
+        const horas: ConteoHora[] = [];
+        for (let h = desde; h <= hasta; h++) {
+          horas.push({ hora: `${String(h).padStart(2, "0")}:00`, cantidad: conteoHoras[h] || 0 });
+        }
+        setHorariosPico(horas);
+      }
     }, (error) => console.error("Error al cargar historial desde Supabase:", error));
 
     return () => unsubscribe();
@@ -153,7 +186,7 @@ export default function Dashboard() {
   // 3. FUNCIÓN MANEJO DE FALTAS MANUALES
   const handleToggleFalta = async (item: Equipo) => {
     const tieneFalta = esEstado(item.estado, ESTADOS.NO_RESPONDE);
-    
+
     const swalConfig: SweetAlertOptions = tieneFalta
       ? { title: '¿Retirar Falta?', text: `Se quitará la marca de moroso a "${item.nombre}" y volverá a estar Prestado.`, icon: 'info', confirmButtonColor: '#28a745' }
       : { title: '¿Marcar Falta?', text: `Se enviará un correo automático de advertencia a quien tiene el equipo "${item.nombre}".`, icon: 'warning', confirmButtonColor: '#d33' };
@@ -182,7 +215,7 @@ export default function Dashboard() {
     }
   };
 
-  // --- NUEVO: FUNCIÓN SÓLO PARA REENVIAR CORREO ---
+  // --- FUNCIÓN SÓLO PARA REENVIAR CORREO ---
   const handleResendEmail = async (item: Equipo) => {
     const result = await Swal.fire({
       title: '¿Reenviar correo de advertencia?',
@@ -211,12 +244,12 @@ export default function Dashboard() {
     }
   };
 
-  const tarjetas = [
-    { clave: "total", etiqueta: "Total", icono: "📦", valor: metrics.total },
-    { clave: "disponibles", etiqueta: "Disponibles", icono: "✅", valor: metrics.disponibles },
-    { clave: "prestados", etiqueta: "Prestados", icono: "🔄", valor: metrics.prestados },
-    { clave: "faltas", etiqueta: "Faltas", icono: "⚠️", valor: metrics.faltas },
-  ];
+  const valorTarjeta = (valor: number) => (cargando ? "—" : valor);
+  const datosDona = ESTADOS_DASHBOARD
+    .map(e => ({ ...e, valor: metrics[e.clave] }))
+    .filter(e => e.valor > 0);
+  const hoy = new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const periodo = `últimos ${DIAS_HISTORIAL_DASHBOARD} días`;
 
   return (
     <div className="app-layout">
@@ -230,151 +263,217 @@ export default function Dashboard() {
             <p className="pagina-subtitulo">Bienvenido, <b>{userData?.nombre}</b></p>
           </div>
           <div className="dashboard-encabezado__extras">
-            <div className="dashboard-fecha">Hoy: {new Date().toLocaleDateString()}</div>
+            <div className="dashboard-fecha">📅 {hoy}</div>
             <button
               type="button"
               onClick={toggleTheme}
               className="dashboard-tema"
               aria-label={theme === "light" ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
+              title={theme === "light" ? "Modo oscuro" : "Modo claro"}
             >
               {theme === "light" ? "🌙" : "☀️"}
             </button>
           </div>
         </header>
 
-        {/* METRICAS RAPIDAS */}
+        {/* CONTADOR DE EQUIPOS */}
+        <h2 className="dashboard-seccion">Inventario</h2>
         <div className="dashboard-metricas">
-          {tarjetas.map((tarjeta) => (
-            <div key={tarjeta.clave} className="dashboard-metrica">
-              <div className={`dashboard-metrica__icono dashboard-metrica__icono--${tarjeta.clave}`} aria-hidden="true">
-                {tarjeta.icono}
-              </div>
+          <div className="dashboard-metrica dashboard-metrica--total">
+            <div className="dashboard-metrica__icono" aria-hidden="true">📦</div>
+            <div>
+              <p className="dashboard-metrica__etiqueta">Total de equipos</p>
+              <p className="dashboard-metrica__valor">{valorTarjeta(metrics.total)}</p>
+              <p className="dashboard-metrica__detalle">registrados en el sistema</p>
+            </div>
+          </div>
+          {ESTADOS_DASHBOARD.map((estado) => (
+            <div
+              key={estado.clave}
+              className="dashboard-metrica"
+              style={{ "--metrica-color": estado.color } as CSSProperties}
+            >
+              <div className="dashboard-metrica__icono" aria-hidden="true">{estado.icono}</div>
               <div>
-                <p className="dashboard-metrica__etiqueta">{tarjeta.etiqueta}</p>
-                <h3 className="dashboard-metrica__valor">{tarjeta.valor}</h3>
+                <p className="dashboard-metrica__etiqueta">{estado.etiqueta}</p>
+                <p className="dashboard-metrica__valor">{valorTarjeta(metrics[estado.clave])}</p>
+                <p className="dashboard-metrica__detalle">
+                  {cargando ? " " : `${porcentaje(metrics[estado.clave], metrics.total)}% del total`}
+                </p>
               </div>
             </div>
           ))}
         </div>
 
-        {/* SECCIÓN ESTADÍSTICAS */}
-        <h2 className="dashboard-seccion">Métricas de Uso</h2>
-        <div className="dashboard-graficas">
-          <div className="tarjeta dashboard-grafica">
-            <h3 className="dashboard-grafica__titulo">Top 5: Equipos más pedidos <small>(últimos {DIAS_HISTORIAL_DASHBOARD} días)</small></h3>
-            <div className="dashboard-grafica__lienzo">
-              <ResponsiveContainer>
-                <BarChart data={topEquipos}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
-                  <XAxis dataKey="equipo" tick={{fill: 'var(--text-color)', fontSize: 10}} />
-                  <YAxis tick={{fill: 'var(--text-color)'}} />
-                  <Tooltip contentStyle={{backgroundColor: 'var(--card-bg)', borderRadius: '10px'}} />
-                  <Bar dataKey="prestamos" fill="#1976d2" radius={4} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          <div className="tarjeta dashboard-grafica">
-            <h3 className="dashboard-grafica__titulo">Horarios Pico (Préstamos) <small>(últimos {DIAS_HISTORIAL_DASHBOARD} días)</small></h3>
-            <div className="dashboard-grafica__lienzo">
-              <ResponsiveContainer>
-                <LineChart data={horariosPico}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                  <XAxis dataKey="hora" tick={{fill: 'var(--text-color)'}} />
-                  <YAxis tick={{fill: 'var(--text-color)'}} />
-                  <Tooltip contentStyle={{backgroundColor: 'var(--card-bg)', borderRadius: '10px'}} />
-                  <Line type="monotone" dataKey="cantidad" stroke="#ad1457" strokeWidth={3} dot={{r:4}} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-
         {/* GRAFICAS DE ESTADO E INVENTARIO */}
         <div className="dashboard-graficas">
-          <div className="tarjeta dashboard-grafica">
-            <h3 className="dashboard-grafica__titulo">Distribución de Estados</h3>
-            <div className="dashboard-grafica__lienzo">
-              <ResponsiveContainer>
-                <PieChart>
-                  <Pie data={statusData} innerRadius={60} outerRadius={80} dataKey="value" nameKey="name">
-                    {statusData.map((_, i) => <Cell key={i} fill={STATUS_COLORS[i % STATUS_COLORS.length]}/>)}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          <div className="tarjeta dashboard-grafica">
-            <h3 className="dashboard-grafica__titulo">Equipos por Categoría</h3>
-            <div className="dashboard-grafica__lienzo">
-              <ResponsiveContainer>
-                <BarChart data={categoryData}>
-                  <XAxis dataKey="categoria" tick={{fill: 'var(--text-color)'}}/>
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="cantidad" fill="#ff6600" radius={4} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+          <section className="tarjeta dashboard-grafica">
+            <h3 className="dashboard-grafica__titulo">¿Cómo están los equipos?</h3>
+            <p className="dashboard-grafica__ayuda">Estado actual de todo el inventario.</p>
+            {datosDona.length === 0 ? (
+              <GraficaVacia>{cargando ? "Cargando…" : "Aún no hay equipos registrados."}</GraficaVacia>
+            ) : (
+              <div className="dashboard-dona">
+                <div className="dashboard-dona__grafica">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={datosDona}
+                        innerRadius="68%"
+                        outerRadius="95%"
+                        dataKey="valor"
+                        nameKey="etiqueta"
+                        paddingAngle={datosDona.length > 1 ? 2 : 0}
+                        stroke="var(--card-bg)"
+                        strokeWidth={2}
+                        isAnimationActive={false}
+                      >
+                        {datosDona.map((e) => <Cell key={e.clave} fill={e.color} />)}
+                      </Pie>
+                      <Tooltip {...TOOLTIP_PROPS} formatter={(valor) => [`${valor} equipos`, ""]} separator="" />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="dashboard-dona__centro" aria-hidden="true">
+                    <strong>{metrics.total}</strong>
+                    <span>equipos</span>
+                  </div>
+                </div>
+                <ul className="dashboard-leyenda">
+                  {ESTADOS_DASHBOARD.map((e) => (
+                    <li key={e.clave}>
+                      <span className="dashboard-leyenda__punto" style={{ background: e.color }} />
+                      <span className="dashboard-leyenda__nombre">{e.etiqueta}</span>
+                      <span className="dashboard-leyenda__valor">{metrics[e.clave]}</span>
+                      <span className="dashboard-leyenda__pct">{porcentaje(metrics[e.clave], metrics.total)}%</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </section>
+
+          <section className="tarjeta dashboard-grafica">
+            <h3 className="dashboard-grafica__titulo">Equipos por categoría</h3>
+            <p className="dashboard-grafica__ayuda">Cuántos equipos hay de cada tipo.</p>
+            {categoryData.length === 0 ? (
+              <GraficaVacia>{cargando ? "Cargando…" : "Sin categorías para mostrar."}</GraficaVacia>
+            ) : (
+              <div className="dashboard-grafica__lienzo" style={{ height: Math.max(200, categoryData.length * 40 + 30) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={categoryData} layout="vertical" margin={{ left: 8, right: 24 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border-color)" />
+                    <XAxis type="number" allowDecimals={false} tick={EJE_TICK} axisLine={EJE_LINEA} tickLine={false} />
+                    <YAxis type="category" dataKey="categoria" width={130} tick={EJE_TICK} tickFormatter={(v) => recortar(String(v))} axisLine={EJE_LINEA} tickLine={false} />
+                    <Tooltip {...TOOLTIP_PROPS} formatter={(valor) => [`${valor} equipos`, "Cantidad"]} />
+                    <Bar dataKey="cantidad" fill="#ff6f00" radius={[0, 4, 4, 0]} maxBarSize={28} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </section>
+        </div>
+
+        {/* SECCIÓN ESTADÍSTICAS */}
+        <h2 className="dashboard-seccion">Uso de los equipos <small>({periodo})</small></h2>
+        <div className="dashboard-graficas">
+          <section className="tarjeta dashboard-grafica">
+            <h3 className="dashboard-grafica__titulo">Top 5: equipos más pedidos</h3>
+            <p className="dashboard-grafica__ayuda">Número de préstamos por equipo.</p>
+            {topEquipos.length === 0 ? (
+              <GraficaVacia>Todavía no hay préstamos en este periodo.</GraficaVacia>
+            ) : (
+              <div className="dashboard-grafica__lienzo">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topEquipos} layout="vertical" margin={{ left: 8, right: 24 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border-color)" />
+                    <XAxis type="number" allowDecimals={false} tick={EJE_TICK} axisLine={EJE_LINEA} tickLine={false} />
+                    <YAxis type="category" dataKey="equipo" width={130} tick={EJE_TICK} tickFormatter={(v) => recortar(String(v))} axisLine={EJE_LINEA} tickLine={false} />
+                    <Tooltip {...TOOLTIP_PROPS} formatter={(valor) => [`${valor} préstamos`, "Total"]} />
+                    <Bar dataKey="prestamos" fill="#1976d2" radius={[0, 4, 4, 0]} maxBarSize={28} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </section>
+
+          <section className="tarjeta dashboard-grafica">
+            <h3 className="dashboard-grafica__titulo">Horarios con más préstamos</h3>
+            <p className="dashboard-grafica__ayuda">A qué hora del día se piden más equipos.</p>
+            {horariosPico.length === 0 ? (
+              <GraficaVacia>Todavía no hay préstamos en este periodo.</GraficaVacia>
+            ) : (
+              <div className="dashboard-grafica__lienzo">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={horariosPico} margin={{ right: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
+                    <XAxis dataKey="hora" tick={EJE_TICK} axisLine={EJE_LINEA} tickLine={false} interval="preserveStartEnd" minTickGap={8} />
+                    <YAxis allowDecimals={false} tick={EJE_TICK} axisLine={EJE_LINEA} tickLine={false} width={36} />
+                    <Tooltip {...TOOLTIP_PROPS} formatter={(valor) => [`${valor} préstamos`, "Total"]} />
+                    <Bar dataKey="cantidad" fill="#ad1457" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </section>
         </div>
 
         {/* TABLA DE PRESTADOS */}
-        <div className="tarjeta">
-          <h3 className="dashboard-grafica__titulo">⚠️ Equipos en Posesión ({prestadosList.length})</h3>
-          <div className="tabla-scroll">
-            <table className="dashboard-tabla">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Equipo</th>
-                  <th>Poseedor</th>
-                  <th>Estado</th>
-                  <th>Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {prestadosList.map(item => {
-                  const tieneFalta = esEstado(item.estado, ESTADOS.NO_RESPONDE);
-                  return (
-                    <tr key={item.id}>
-                      <td>{item.id_qr || item.id}</td>
-                      <td>{item.nombre}</td>
-                      <td>{item.poseedor_actual || "Anónimo"}</td>
-                      <td>
-                        <span className={`dashboard-estado${tieneFalta ? " dashboard-estado--falta" : ""}`}>
-                          {item.estado}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="dashboard-acciones">
-                          {/* Botón principal de Falta */}
-                          <button
-                            type="button"
-                            onClick={() => handleToggleFalta(item)}
-                            className={`dashboard-accion ${tieneFalta ? "dashboard-accion--quitar" : "dashboard-accion--marcar"}`}
-                          >
-                            {tieneFalta ? "Quitar Falta" : "Marcar Falta"}
-                          </button>
-
-                          {/* Reenviar correo: solo cuando ya es falta */}
-                          {tieneFalta && (
-                            <button type="button" onClick={() => handleResendEmail(item)} className="dashboard-accion dashboard-accion--reenviar">
-                              Reenviar ✉️
+        <section className="tarjeta">
+          <h3 className="dashboard-grafica__titulo">Equipos prestados ahora ({prestadosList.length})</h3>
+          <p className="dashboard-grafica__ayuda">Quién tiene cada equipo. Los que tienen falta aparecen primero.</p>
+          {prestadosList.length === 0 ? (
+            <GraficaVacia>✅ No hay equipos prestados en este momento.</GraficaVacia>
+          ) : (
+            <div className="tabla-scroll">
+              <table className="dashboard-tabla">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Equipo</th>
+                    <th>Poseedor</th>
+                    <th>Estado</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {prestadosList.map(item => {
+                    const tieneFalta = esEstado(item.estado, ESTADOS.NO_RESPONDE);
+                    return (
+                      <tr key={item.id} className={tieneFalta ? "dashboard-tabla__fila--falta" : undefined}>
+                        <td className="dashboard-tabla__id">{item.id_qr || item.id}</td>
+                        <td>{item.nombre}</td>
+                        <td>{item.poseedor_actual || "Anónimo"}</td>
+                        <td>
+                          <span className={`dashboard-estado${tieneFalta ? " dashboard-estado--falta" : ""}`}>
+                            {tieneFalta ? "⚠️ Con falta" : item.estado}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="dashboard-acciones">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleFalta(item)}
+                              className={`dashboard-accion ${tieneFalta ? "dashboard-accion--quitar" : "dashboard-accion--marcar"}`}
+                            >
+                              {tieneFalta ? "Quitar falta" : "Marcar falta"}
                             </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+
+                            {/* Reenviar correo: solo cuando ya es falta */}
+                            {tieneFalta && (
+                              <button type="button" onClick={() => handleResendEmail(item)} className="dashboard-accion dashboard-accion--reenviar">
+                                ✉️ Reenviar correo
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       </main>
     </div>
   );

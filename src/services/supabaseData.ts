@@ -126,6 +126,17 @@ export async function getHistorial({ start, end }: { start?: Date; end?: Date } 
   return ((data ?? []) as HistorialRow[]).map(mapRecord);
 }
 
+// Movimientos de un solo equipo (más reciente primero), p. ej. su historial de mantenimiento.
+export async function getHistorialEquipo(idEquipo: string): Promise<Historial[]> {
+  const { data, error } = await supabase
+    .from("historial")
+    .select("id, fecha, data")
+    .eq("data->>idEquipo", idEquipo)
+    .order("fecha", { ascending: false });
+  throwIfError(error);
+  return ((data ?? []) as HistorialRow[]).map(mapRecord);
+}
+
 export async function updateEquipo(id: string, changes: Partial<EquipoData>): Promise<void> {
   const { error } = await supabase.rpc("update_equipo", {
     p_id: id,
