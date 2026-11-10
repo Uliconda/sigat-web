@@ -5,6 +5,7 @@ import { supabase } from "../config/supabase";
 import { subscribeToEquipos } from "../services/supabaseData";
 import logo from "../assets/logo-buho.webp";
 import type { Equipo } from "../types";
+import { esUrgente } from "../utils/mantenimiento";
 import "./Sidebar.css";
 
 const MENU = [
@@ -15,18 +16,11 @@ const MENU = [
   { name: "Personal Administrativo", path: "/personal", icon: "🗂️" },
 ];
 
-const DIAS_MANTENIMIENTO = 90;
-
-// Cuenta los equipos sin revisión en más de 90 días.
-function contarUrgentes(equipos: Equipo[]): number {
-  const limite = Date.now() - DIAS_MANTENIMIENTO * 24 * 60 * 60 * 1000;
-  return equipos.filter((equipo) => {
-    const valor = equipo.fecha_revision || equipo.lastCheck;
-    if (!valor) return false;
-    const fecha = new Date(valor);
-    return fecha.getTime() < limite;
-  }).length;
-}
+// Misma regla que la pantalla de Mantenimiento (ver utils/mantenimiento.ts).
+const contarUrgentes = (equipos: Equipo[]): number => {
+  const ahora = Date.now();
+  return equipos.filter((equipo) => esUrgente(equipo, ahora)).length;
+};
 
 export default function Sidebar() {
   const navigate = useNavigate();
@@ -138,7 +132,7 @@ export default function Sidebar() {
 
       {/* Aviso flotante de mantenimiento urgente en cualquier pantalla */}
       {urgentCount > 0 && location.pathname !== "/mantenimiento" && (
-        <button type="button" className="aviso-urgente" onClick={() => navigate("/mantenimiento")}>
+        <button type="button" className="aviso-urgente" onClick={() => navigate("/mantenimiento?filtro=urgente")}>
           ⚠️ {urgentCount} {urgentCount === 1 ? "equipo" : "equipos"} con mantenimiento <b>URGENTE</b>
         </button>
       )}
