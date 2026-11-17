@@ -14,7 +14,8 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.118.0",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.119.0",
     "jspdf": "^4.2.0",
     "jspdf-autotable": "^5.0.7",
     "qrcode": "^1.5.4",
