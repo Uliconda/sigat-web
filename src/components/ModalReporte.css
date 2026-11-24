@@ -145,3 +145,27 @@
 .reporte-categoria__desplegar:hover {
   background: var(--hover-bg);
 }
+
+/* Diálogo de asignar ubicación (reutiliza esta ventana). */
+.dialogo-ubicacion {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.dialogo-ubicacion label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.dialogo-ubicacion select {
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text-color);
+}

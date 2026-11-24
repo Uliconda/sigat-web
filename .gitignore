@@ -33,3 +33,6 @@ server/data/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+
+# Caché de compilación de TypeScript
+*.tsbuildinfo

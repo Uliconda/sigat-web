@@ -33,6 +33,11 @@ export interface EquipoData {
   categoria?: string;
   subcategoria?: string;
   subSubcategoria?: string;
+  /** Ubicación (catálogo edificios › espacios › áreas). null = sin edificio / espacio / área. */
+  edificio?: string | null;
+  espacio?: string | null;
+  /** Departamento o área dentro del espacio. */
+  area?: string | null;
   estado?: string;
   condicion_fisica?: string;
   usuarioActual?: string;
@@ -121,4 +126,24 @@ export interface Asignacion {
   condicion_devolucion: string | null;
   observaciones: string | null;
   origen: string;
+}
+
+/** Fila de edificios (catálogo de ubicaciones). */
+export interface Edificio {
+  id: string;
+  nombre: string;
+}
+
+/** Fila de espacios (aula, oficina, laboratorio...) dentro de un edificio. */
+export interface Espacio {
+  id: string;
+  edificio_id: string;
+  nombre: string;
+}
+
+/** Fila de áreas: departamento o área dentro de un espacio. */
+export interface Area {
+  id: string;
+  espacio_id: string;
+  nombre: string;
 }

@@ -11,9 +11,11 @@ import "./Sidebar.css";
 const MENU = [
   { name: "Dashboard", path: "/dashboard", icon: "📊" },
   { name: "Inventario", path: "/inventario", icon: "📦" },
-  { name: "Usuarios", path: "/usuarios", icon: "👥" },
+  { name: "Reportes", path: "/reportes", icon: "📄" },
   { name: "Mantenimiento", path: "/mantenimiento", icon: "🛠️" },
-  { name: "Personal Administrativo", path: "/personal", icon: "🗂️" },
+  { name: "Personal", path: "/personal", icon: "🗂️" },
+  { name: "Usuarios", path: "/usuarios", icon: "👥" },
+  { name: "QR", path: "/qr", icon: "🔳" },
 ];
 
 // Misma regla que la pantalla de Mantenimiento (ver utils/mantenimiento.ts).
