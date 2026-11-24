@@ -1,61 +1,115 @@
-// src/pages/Inventory.tsx
-import { useState, useEffect } from "react";
+// src/pages/Inventory.tsx — Inventario con tres vistas: Todos, Por edificio y
+// Por categoría. Los reportes están en /reportes.
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import QRCode from "qrcode";
+import Swal from "sweetalert2";
+import { DialogoUbicacion } from "../components/DialogoUbicacion";
+import { PanelEdificios } from "../components/PanelEdificios";
+import Sidebar from "../components/Sidebar";
+import { ESTADOS, esEstado } from "../constants/estados";
+import { useAuth } from "../context/useAuth";
 import {
   addHistorial,
-  getHistorial,
+  subscribeToAreas,
+  subscribeToEdificios,
   subscribeToEquipos,
+  subscribeToEspacios,
   updateEquipo,
 } from "../services/supabaseData";
-import { useAuth } from "../context/useAuth";
-import Sidebar from "../components/Sidebar";
-import { DialogoReporteInventario } from "../components/DialogoReporteInventario";
-
-
-import QRCode from "qrcode";
-import { descargarExcel } from "../utils/excel";
-import { escapeHtml } from "../utils/html";
-import Swal from 'sweetalert2';
+import type { Area, Edificio, Equipo, Espacio } from "../types";
+import { areasInventario, categoriaDe, subcategoriaDe } from "../utils/areasInventario";
 import { mensajeDeError } from "../utils/errores";
-import { ESTADOS, esEstado } from "../constants/estados";
-import type { Equipo } from "../types";
+import { escapeHtml } from "../utils/html";
+import { areaDe, describirUbicacion, edificioDe, espacioDe } from "../utils/ubicacion";
+import "../components/PanelEdificios.css";
 import "./Inventory.css";
+
+type Vista = "todos" | "edificio" | "categoria";
+const VISTAS: { clave: Vista; texto: string }[] = [
+  { clave: "todos", texto: "Todos" },
+  { clave: "edificio", texto: "Por edificio" },
+  { clave: "categoria", texto: "Por categoría" },
+];
+
+const esPlantilla = (e: Equipo) => Boolean(e.isTemplate) || e.nombre === "Plantilla Sistema";
+const normalizar = (texto: unknown) => String(texto ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 export default function Inventory() {
   const [equipos, setEquipos] = useState<Equipo[]>([]);
+  const [edificios, setEdificios] = useState<Edificio[]>([]);
+  const [espacios, setEspacios] = useState<Espacio[]>([]);
+  const [areasCatalogo, setAreasCatalogo] = useState<Area[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-
-  const [reportType, setReportType] = useState("all"); 
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [reporteAbierto, setReporteAbierto] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const vista: Vista = VISTAS.some((v) => v.clave === params.get("vista")) ? (params.get("vista") as Vista) : "todos";
+  const [edificio, setEdificio] = useState<string | null>(null);
+  const [espacio, setEspacio] = useState<string | null>(null);
+  const [area, setArea] = useState<string | null>(null);
+  const [categoria, setCategoria] = useState<string | null>(null);
+  const [subcategoria, setSubcategoria] = useState<string | null>(null);
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const [asignando, setAsignando] = useState(false);
 
   const { userData } = useAuth();
 
   // ==========================================
-  // 1. Cargar los equipos en tiempo real
+  // 1. Equipos y catálogo de edificios en tiempo real
   // ==========================================
   useEffect(() => {
-    const unsubscribe = subscribeToEquipos((data) => {
-      setEquipos(data);
-    }, (error) => console.error("Error al cargar equipos desde Supabase:", error));
-    return () => unsubscribe();
+    const alFallar = (origen: string) => (error: unknown) => console.error(`Error al cargar ${origen} desde Supabase:`, error);
+    const cerrar = [
+      subscribeToEquipos(setEquipos, alFallar("equipos")),
+      subscribeToEdificios(setEdificios, alFallar("edificios")),
+      subscribeToEspacios(setEspacios, alFallar("espacios")),
+      subscribeToAreas(setAreasCatalogo, alFallar("áreas")),
+    ];
+    return () => cerrar.forEach((fn) => fn());
   }, []);
 
-  // FILTRADO DE EQUIPOS Y OCULTAMIENTO DE PLANTILLAS
-  // ORDEN ASCENDENTE POR ID (001, 002, ... 010, 100). "numeric" compara los
-  // números por su valor, así "010" va después de "009" y no después de "001".
-  const filteredEquipos = equipos
-    .filter((item) => {
-      if (item.isTemplate || item.nombre === "Plantilla Sistema") return false;
+  const cambiarVista = (clave: Vista) => {
+    setParams(clave === "todos" ? {} : { vista: clave }, { replace: true });
+    setEdificio(null);
+    setEspacio(null);
+    setArea(null);
+    setCategoria(null);
+    setSubcategoria(null);
+  };
 
-      return (
-        (item.nombre || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.id || "").toLowerCase().includes(searchTerm.toLowerCase())
-      );
+  const reales = useMemo(() => equipos.filter((e) => !esPlantilla(e)), [equipos]);
+  const areas = useMemo(() => areasInventario(reales), [reales]);
+  const subcategorias = areas.find((a) => a.categoria === categoria)?.subcategorias ?? [];
+
+  // FILTRADO Y ORDEN ASCENDENTE POR ID (001, 002, ... 010, 100). "numeric"
+  // compara los números por su valor, así "010" va después de "009".
+  const busqueda = normalizar(searchTerm.trim());
+  const filteredEquipos = reales
+    .filter((item) => {
+      if (vista === "edificio" && edificio && edificioDe(item) !== edificio) return false;
+      if (vista === "edificio" && edificio && espacio && espacioDe(item) !== espacio) return false;
+      if (vista === "edificio" && edificio && espacio && area && areaDe(item) !== area) return false;
+      if (vista === "categoria" && categoria && categoriaDe(item) !== categoria) return false;
+      if (vista === "categoria" && categoria && subcategoria && subcategoriaDe(item) !== subcategoria) return false;
+      if (!busqueda) return true;
+      return [item.nombre, item.id, describirUbicacion(item)].some((campo) => normalizar(campo).includes(busqueda));
     })
-    .sort((a, b) =>
-      (a.id || "").localeCompare(b.id || "", "es", { numeric: true, sensitivity: "base" })
-    );
+    .sort((a, b) => (a.id || "").localeCompare(b.id || "", "es", { numeric: true, sensitivity: "base" }));
+
+  // Selección para asignar ubicación a varios equipos.
+  const todosMarcados = filteredEquipos.length > 0 && filteredEquipos.every((e) => seleccion.has(e.id));
+  const alternarTodos = () =>
+    setSeleccion((prev) => {
+      const siguiente = new Set(prev);
+      filteredEquipos.forEach((e) => (todosMarcados ? siguiente.delete(e.id) : siguiente.add(e.id)));
+      return siguiente;
+    });
+  const alternar = (id: string) =>
+    setSeleccion((prev) => {
+      const siguiente = new Set(prev);
+      if (siguiente.has(id)) siguiente.delete(id);
+      else siguiente.add(id);
+      return siguiente;
+    });
 
   // ==========================================
   // 2. FUNCIÓN PARA CAMBIAR ESTADO NORMAL
@@ -265,162 +319,6 @@ export default function Inventory() {
     }
   };
 
-  // ==========================================
-  // FUNCIÓN PARA EXPORTAR BASE DE DATOS PARA P-TOUCH (ETIQUETAS)
-  // ==========================================
-  const exportForPTouch = () => {
-    // 1. Definimos los encabezados de las columnas
-    let csvContent = "ID,Nombre_Equipo,No_Serie,Datos_QR\n";
-
-    // 2. Usamos filteredEquipos en lugar de equipos
-    filteredEquipos.forEach(item => {
-      // Ignoramos plantillas
-      if (item.isTemplate || item.nombre?.toLowerCase() === "plantilla sistema") return;
-
-      // Escapamos las comas reemplazándolas por espacios para no romper el CSV
-      const id = item.id || "";
-      const nombre = (item.nombre || "---").replace(/,/g, "");
-      const serie = (item.no_serie || "---").replace(/,/g, "");
-      
-      // Aquí defines qué es lo que lee tu QR
-      const datosQR = id; 
-
-      // Agregamos la fila al CSV
-      csvContent += `${id},${nombre},${serie},${datosQR}\n`;
-    });
-
-    // 3. Creamos y descargamos el archivo CSV
-    const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "Inventario_Etiquetas_PTouch.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    Swal.fire("Exportado", "Archivo CSV generado para P-Touch Editor", "success");
-  };
-
-// ==========================================
-  // 6. EXPORTAR EL HISTORIAL (EXCEL) CON REGISTRO HISTÓRICO REAL
-  // ==========================================
-  const exportHistoryToExcel = async () => {
-    try {
-      let nombreArchivo = `Reporte_SIGAT_Completo_${new Date().toLocaleDateString('es-MX').replace(/\//g, '-')}.xlsx`;
-      let start;
-      let end;
-
-      if (reportType !== "all") {
-        if (!startDate || !endDate) {
-          Swal.fire("Faltan datos", "Por favor selecciona la fecha de inicio y fin para generar el reporte.", "warning");
-          return;
-        }
-
-        start = new Date(startDate);
-        start.setHours(0, 0, 0, 0); 
-        end = new Date(endDate);
-        end.setHours(23, 59, 59, 999); 
-
-        if (start > end) {
-          Swal.fire("Error en las fechas", "La fecha de inicio no puede ser mayor a la fecha de fin.", "error");
-          return;
-        }
-
-        nombreArchivo = `Reporte_SIGAT_${startDate}_al_${endDate}.xlsx`;
-      }
-
-      Swal.fire({ title: 'Generando...', text: 'Obteniendo datos de la nube', allowOutsideClick: false, didOpen: () => { Swal.showLoading() } });
-
-      const historial = await getHistorial({ start, end });
-
-      if (historial.length === 0) {
-        Swal.fire("Sin datos", "No hay movimientos registrados en este rango de fechas.", "info");
-        return;
-      }
-
-      // Los cambios de carpetas (crear, renombrar, eliminar) van en su propia hoja.
-      const movimientosEquipos = historial.filter((data) => data.tipo !== "carpeta");
-      const cambiosCarpetas = historial.filter((data) => data.tipo === "carpeta");
-
-      const datosHistorial = movimientosEquipos.map((data) => {
-
-        const fechaLegible = data.fecha
-          ? new Date(data.fecha).toLocaleString("es-MX")
-          : "Sin fecha";
-
-        const equipoInfo = equipos.find(e => e.id === data.idEquipo);
-
-        // 🌟 LÓGICA DE ESTADO HISTÓRICO: Determinamos qué estado tenía en ESE momento exacto
-        let estadoEnEseMomento = "DISPONIBLE";
-        let condicionEnEseMomento = "Buen estado";
-
-        const accionNormalizada = data.accion ? data.accion.toUpperCase() : "";
-        const obsNormalizada = data.observaciones ? data.observaciones.toUpperCase() : "";
-
-        if (accionNormalizada === "PRÉSTAMO") {
-          estadoEnEseMomento = "PRESTADO";
-          // En los préstamos usualmente no se evalúa condición física nueva, toma la que traía o "Buen estado"
-          condicionEnEseMomento = equipoInfo?.condicion_fisica || "Buen estado"; 
-        } 
-        else if (accionNormalizada === "BAJA") {
-          estadoEnEseMomento = "FUERA DE SERVICIO";
-          condicionEnEseMomento = "Reemplazar / Averiado";
-        } 
-        else if (accionNormalizada === "REACTIVACIÓN") {
-          estadoEnEseMomento = "DISPONIBLE";
-          condicionEnEseMomento = "Buen estado (Reparado)";
-        } 
-        else if (accionNormalizada === "DEVOLUCIÓN") {
-          estadoEnEseMomento = "DISPONIBLE";
-          
-          // 🌟 Mapeo inteligente de la condición física guardada en el texto de observaciones de la app móvil
-          if (obsNormalizada.includes("CONDICIÓN FÍSICA: ACEPTABLE") || obsNormalizada.includes("ACEPTABLE")) {
-            condicionEnEseMomento = "Aceptable";
-          } else if (obsNormalizada.includes("CONDICIÓN FÍSICA: REEMPLAZAR") || obsNormalizada.includes("REEMPLAZAR")) {
-            condicionEnEseMomento = "Reemplazar";
-          } else {
-            condicionEnEseMomento = "Buen estado";
-          }
-        }
-
-        return {
-          "Fecha y Hora": fechaLegible,
-          "ID Equipo": data.idEquipo,
-          "Nombre Equipo": data.nombreEquipo,
-          "Categoría": equipoInfo?.categoria || "---",
-          "Subcategoría": equipoInfo?.subcategoria || "---",          
-          "Tipo (Sub-Sub)": equipoInfo?.subSubcategoria || "---",     
-          // 🌟 AHORA MUESTRAN EL ESTADO Y CONDICIÓN DE ESE DÍA ESPECÍFICO
-          "Estado en ese Movimiento": estadoEnEseMomento,
-          "Condición Física en el registro": condicionEnEseMomento,
-          "Acción efectuada": data.accion,
-          "Administrador": data.admin,
-          "Observaciones del movimiento": data.observaciones,
-        };
-      });
-
-      const datosCarpetas = cambiosCarpetas.map((data) => ({
-        "Fecha y Hora": data.fecha ? new Date(data.fecha).toLocaleString("es-MX") : "Sin fecha",
-        "Acción efectuada": data.accion,
-        "Carpeta": data.carpeta,
-        "Equipos afectados": data.equiposAfectados ?? 0,
-        "Administrador": data.admin,
-        "Observaciones": data.observaciones,
-      }));
-      await descargarExcel(nombreArchivo, [
-        { nombre: "Historial", filas: datosHistorial },
-        { nombre: "Carpetas", filas: datosCarpetas },
-      ]);
-      
-      Swal.fire("¡Descarga lista!", "El archivo Excel se ha generado correctamente.", "success");
-
-    } catch (error) {
-      console.error("Error al generar Excel:", error);
-      Swal.fire("No se pudo generar el Excel", mensajeDeError(error), "error");
-    }
-  };
-
   return (
     <div className="app-layout">
       <Sidebar />
@@ -428,59 +326,115 @@ export default function Inventory() {
       <main className="app-main">
         <header className="pagina-encabezado">
           <div>
-            <h1 className="pagina-titulo">Inventario y Reportes</h1>
-            <p className="pagina-subtitulo">Gestiona equipos y descarga la bitácora completa de movimientos</p>
+            <h1 className="pagina-titulo">Inventario</h1>
+            <p className="pagina-subtitulo">Consulta los equipos por edificio o categoría y asígnales su ubicación</p>
           </div>
-
           <div className="inventario-acciones">
-            <div className="inventario-exportar">
-              <select
-                value={reportType}
-                onChange={(e) => setReportType(e.target.value)}
-                className="inventario-exportar__select"
-                aria-label="Periodo del reporte"
-              >
-                <option value="all">Todo el historial</option>
-                <option value="rango">Elegir Fechas...</option>
-              </select>
-
-              {reportType === "rango" && (
-                <div className="inventario-exportar__fechas">
-                  <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="inventario-exportar__fecha" aria-label="Fecha de inicio" />
-                  <span>a</span>
-                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="inventario-exportar__fecha" aria-label="Fecha de fin" />
-                </div>
-              )}
-
-              <button type="button" onClick={exportHistoryToExcel} className="inventario-boton inventario-boton--excel">
-                {reportType === "all" ? "📊 Descargar TODO" : "📊 Descargar Rango"}
-              </button>
-            </div>
-
-            <button type="button" onClick={() => setReporteAbierto(true)} className="inventario-boton inventario-boton--pdf">📄 Generar reporte PDF</button>
-            <button type="button" onClick={exportForPTouch} className="inventario-boton inventario-boton--ptouch">
-              🖨️ Exportar Base de datos
-            </button>
+            <Link to="/reportes" className="btn btn--secundario">📄 Reportes PDF y Excel</Link>
           </div>
         </header>
+
+        <div className="inventario-vistas" role="tablist" aria-label="Vista del inventario">
+          {VISTAS.map((v) => (
+            <button
+              key={v.clave}
+              type="button"
+              role="tab"
+              aria-selected={vista === v.clave}
+              className={`inventario-vista${vista === v.clave ? " inventario-vista--activa" : ""}`}
+              onClick={() => cambiarVista(v.clave)}
+            >
+              {v.texto}
+            </button>
+          ))}
+        </div>
+
+        {vista === "edificio" && (
+          <PanelEdificios
+            equipos={reales}
+            edificios={edificios}
+            espacios={espacios}
+            areas={areasCatalogo}
+            edificio={edificio}
+            espacio={espacio}
+            area={area}
+            onEdificio={(nombre) => {
+              setEdificio(nombre);
+              setEspacio(null);
+              setArea(null);
+            }}
+            onEspacio={(nombre) => {
+              setEspacio(nombre);
+              setArea(null);
+            }}
+            onArea={setArea}
+          />
+        )}
+
+        {vista === "categoria" && (
+          <section className="inventario-categorias" aria-label="Categorías">
+            <div className="inventario-categorias__lista">
+              {areas.map((a) => (
+                <button
+                  key={a.categoria}
+                  type="button"
+                  className={`chip${categoria === a.categoria ? " chip--activo" : ""}`}
+                  onClick={() => {
+                    setCategoria(categoria === a.categoria ? null : a.categoria);
+                    setSubcategoria(null);
+                  }}
+                >
+                  {a.categoria} ({a.cantidad})
+                </button>
+              ))}
+            </div>
+            {categoria && subcategorias.length > 1 && (
+              <div className="inventario-categorias__lista">
+                <span className="panel-edificios__etiqueta">Subcategoría:</span>
+                {subcategorias.map((s) => (
+                  <button
+                    key={s.clave}
+                    type="button"
+                    className={`chip${subcategoria === s.nombre ? " chip--activo" : ""}`}
+                    onClick={() => setSubcategoria(subcategoria === s.nombre ? null : s.nombre)}
+                  >
+                    {s.nombre} ({s.cantidad})
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         <div className="inventario-buscador">
           <span aria-hidden="true">🔍</span>
           <input
             type="search"
             aria-label="Buscar equipos"
-            placeholder="Buscar por nombre o ID..."
+            placeholder="Buscar por nombre, ID o ubicación..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
 
+        {seleccion.size > 0 && (
+          <div className="inventario-seleccion" role="status">
+            <span><b>{seleccion.size}</b> equipo{seleccion.size === 1 ? "" : "s"} seleccionado{seleccion.size === 1 ? "" : "s"}</span>
+            <button type="button" className="btn btn--primario" onClick={() => setAsignando(true)}>📍 Asignar ubicación</button>
+            <button type="button" className="btn btn--secundario" onClick={() => setSeleccion(new Set())}>Quitar selección</button>
+          </div>
+        )}
+
         <div className="tabla-tarjeta">
           <table className="tabla inventario-tabla">
             <thead>
               <tr>
+                <th className="centrado">
+                  <input type="checkbox" checked={todosMarcados} onChange={alternarTodos} aria-label="Seleccionar todos los equipos de la lista" />
+                </th>
                 <th>ID EQUIPO</th>
                 <th>NOMBRE / MODELO</th>
+                <th>UBICACIÓN</th>
                 <th>ESTADO</th>
                 <th>ÚLTIMO USUARIO</th>
                 <th className="centrado">QR</th>
@@ -490,8 +444,12 @@ export default function Inventory() {
             <tbody>
               {filteredEquipos.map((item) => (
                 <tr key={item.id}>
+                  <td className="centrado">
+                    <input type="checkbox" checked={seleccion.has(item.id)} onChange={() => alternar(item.id)} aria-label={`Seleccionar ${item.id}`} />
+                  </td>
                   <td className="negrita">{item.id}</td>
                   <td>{item.nombre}</td>
+                  <td>{describirUbicacion(item) || <span className="reporte-tenue">Sin edificio</span>}</td>
                   <td>
                     <span className={`etiqueta inventario-estado--${claseEstado(item.estado)}`}>
                       {item.estado}
@@ -526,11 +484,17 @@ export default function Inventory() {
         </div>
       </main>
 
-      {reporteAbierto && (
-        <DialogoReporteInventario
-          equipos={filteredEquipos}
-          busqueda={searchTerm}
-          onCerrar={() => setReporteAbierto(false)}
+      {asignando && (
+        <DialogoUbicacion
+          ids={[...seleccion]}
+          edificios={edificios}
+          espacios={espacios}
+          areas={areasCatalogo}
+          onListo={() => {
+            setAsignando(false);
+            setSeleccion(new Set());
+          }}
+          onCerrar={() => setAsignando(false)}
         />
       )}
     </div>
