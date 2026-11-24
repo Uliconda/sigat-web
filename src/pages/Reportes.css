@@ -1,0 +1,78 @@
+/* src/pages/Reportes.css */
+
+.reportes-conteos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.reportes-conteo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border-left: 4px solid var(--border-color);
+}
+
+.reportes-conteo strong {
+  font-size: 26px;
+  color: var(--text-color);
+}
+
+.reportes-conteo span {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.reportes-conteo--exito { border-left-color: var(--success); }
+.reportes-conteo--aviso { border-left-color: var(--warning); }
+.reportes-conteo--peligro { border-left-color: var(--magenta); }
+.reportes-conteo--neutro { border-left-color: var(--neutral); }
+
+.reportes-tabla {
+  margin-bottom: 24px;
+}
+
+.reportes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.reportes-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reportes-item h2 {
+  font-size: 17px;
+  color: var(--text-color);
+}
+
+.reportes-item p {
+  flex: 1;
+  font-size: 14px;
+}
+
+.reportes-item button {
+  align-self: flex-start;
+}
+
+.reportes-fechas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-color);
+}
+
+.reportes-fechas select,
+.reportes-fechas input {
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text-color);
+}

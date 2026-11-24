@@ -12,6 +12,7 @@ const Users = lazy(() => import("./pages/Users"));
 const QrGenerator = lazy(() => import("./pages/QrGenerator"));
 const Maintenance = lazy(() => import("./pages/Maintenance"));
 const Personal = lazy(() => import("./pages/Personal"));
+const Reportes = lazy(() => import("./pages/Reportes"));
 
 const privada = (pagina: ReactNode) => <ProtectedRoute>{pagina}</ProtectedRoute>;
 
@@ -26,6 +27,7 @@ function App() {
           {/* --- RUTAS PRIVADAS (solo administradores) --- */}
           <Route path="/dashboard" element={privada(<Dashboard />)} />
           <Route path="/inventario" element={privada(<Inventory />)} />
+          <Route path="/reportes" element={privada(<Reportes />)} />
           <Route path="/usuarios" element={privada(<Users />)} />
           <Route path="/qr" element={privada(<QrGenerator />)} />
           <Route path="/mantenimiento" element={privada(<Maintenance />)} />
