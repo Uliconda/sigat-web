@@ -63,6 +63,8 @@ Aplica las migraciones de `supabase/migrations/` en orden:
 | `20261105120000_recuperacion_contrasena.sql` | Límite de intentos de restablecimiento |
 | `20261106000000_personal_administrativo.sql` | `personal_administrativo` y `asignaciones_equipo` (llenada por triggers) |
 | `20261107000000_eliminar_personal.sql` | Función `eliminar_personal(p_id)` |
+| `20261119000000_edificios.sql` | Catálogo `edificios`/`espacios`, ubicación de cada equipo y asignación masiva (`asignar_ubicacion`) |
+| `20261119120000_areas.sql` | Tercer nivel `areas` (departamento / área dentro de un espacio) y `asignar_ubicacion` con área |
 
 También se pueden ejecutar a mano, en ese orden, desde el **SQL Editor**; son
 re-ejecutables.

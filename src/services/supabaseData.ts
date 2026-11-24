@@ -2,9 +2,12 @@ import { supabase } from "../config/supabase";
 import type {
   AccionNotificacion,
   Asignacion,
+  Area,
+  Edificio,
   Equipo,
   EquipoData,
   EquipoRow,
+  Espacio,
   Historial,
   HistorialData,
   HistorialRow,
@@ -108,6 +111,37 @@ export const subscribeToAsignaciones = tablaEnTiempoReal<Asignacion, Asignacion>
   columnas:
     "id, personal_id, equipo_id, equipo_nombre, fecha_inicio, fecha_fin, asignado_por, recibido_por, condicion_devolucion, observaciones, origen",
 });
+
+// Catálogo de ubicaciones. Se modifica solo con las funciones de abajo, que
+// actualizan los equipos en la misma transacción (ver 20261119000000_edificios.sql
+// y 20261119120000_areas.sql).
+export const subscribeToEdificios = tablaEnTiempoReal<Edificio, Edificio>("edificios", { columnas: "id, nombre" });
+export const subscribeToEspacios = tablaEnTiempoReal<Espacio, Espacio>("espacios", { columnas: "id, edificio_id, nombre" });
+export const subscribeToAreas = tablaEnTiempoReal<Area, Area>("areas", { columnas: "id, espacio_id, nombre" });
+
+async function rpcUbicacion<T>(funcion: string, params: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.rpc(funcion, params);
+  throwIfError(error);
+  return data as T;
+}
+
+export const crearEdificio = (nombre: string) => rpcUbicacion<string>("crear_edificio", { p_nombre: nombre });
+export const renombrarEdificio = (id: string, nombre: string) =>
+  rpcUbicacion<number>("renombrar_edificio", { p_id: id, p_nombre: nombre });
+export const eliminarEdificio = (id: string) => rpcUbicacion<number>("eliminar_edificio", { p_id: id });
+export const crearEspacio = (edificioId: string, nombre: string) =>
+  rpcUbicacion<string>("crear_espacio", { p_edificio_id: edificioId, p_nombre: nombre });
+export const renombrarEspacio = (id: string, nombre: string) =>
+  rpcUbicacion<number>("renombrar_espacio", { p_id: id, p_nombre: nombre });
+export const eliminarEspacio = (id: string) => rpcUbicacion<number>("eliminar_espacio", { p_id: id });
+export const crearArea = (espacioId: string, nombre: string) =>
+  rpcUbicacion<string>("crear_area", { p_espacio_id: espacioId, p_nombre: nombre });
+export const renombrarArea = (id: string, nombre: string) => rpcUbicacion<number>("renombrar_area", { p_id: id, p_nombre: nombre });
+export const eliminarArea = (id: string) => rpcUbicacion<number>("eliminar_area", { p_id: id });
+
+/** Pone el mismo edificio/espacio/área a varios equipos (edificio null = quitarles la ubicación). */
+export const asignarUbicacion = (ids: string[], edificio: string | null, espacio: string | null, area: string | null) =>
+  rpcUbicacion<number>("asignar_ubicacion", { p_ids: ids, p_edificio: edificio, p_espacio: espacio, p_area: area });
 
 export async function getEquipos(): Promise<Equipo[]> {
   const { data, error } = await supabase.from("equipos").select("*");

@@ -296,5 +296,122 @@ await expectError("ni consultar nombres por correo",
   `select public.nombre_para_recuperacion('admin@sigat.mx')`, [], /permission denied/);
 await db.exec(`reset role`);
 
+console.log("17. Edificios y espacios");
+const ubicacion = async (id) => {
+  // ::text distingue la clave ausente (null de SQL) del null de JSON ("null").
+  const [row] = await rows(`select (data->'edificio')::text as e, (data->'espacio')::text as s from public.equipos where id = $1`, [id]);
+  return [row?.e, row?.s].map((v) => (v == null ? "(sin clave)" : JSON.parse(v)));
+};
+const edificioId = async (nombre) => (await rows(`select id from public.edificios where nombre = $1`, [nombre]))[0]?.id ?? null;
+const espacioId = async (edificio, nombre) =>
+  (await rows(`select s.id from public.espacios s join public.edificios e on e.id = s.edificio_id where e.nombre = $1 and s.nombre = $2`, [edificio, nombre]))[0]?.id ?? null;
+
+await as("");
+check("los equipos anteriores no reciben ubicación", JSON.stringify(await ubicacion("EQ-002")) === '["(sin clave)","(sin clave)"]');
+await db.query(`insert into public.equipos (id, data) values ('UB-1', '{"nombre":"Laptop","edificio":"  edificio   a ","espacio":"aula 3"}')`);
+check("normaliza el edificio y el espacio al guardar", JSON.stringify(await ubicacion("UB-1")) === '["EDIFICIO A","AULA 3"]', JSON.stringify(await ubicacion("UB-1")));
+check("un equipo con ubicación nueva la agrega al catálogo", Boolean(await espacioId("EDIFICIO A", "AULA 3")));
+await db.query(`insert into public.equipos (id, data) values ('UB-2', '{"nombre":"Proyector","edificio":"","espacio":"Aula 9"}')`);
+check("sin edificio, el espacio se borra", JSON.stringify(await ubicacion("UB-2")) === "[null,null]", JSON.stringify(await ubicacion("UB-2")));
+await expectError("rechaza un edificio que no es texto",
+  `insert into public.equipos (id, data) values ('UB-X', '{"edificio":5}')`, [], /debe ser texto/);
+
+await as("usuario");
+await expectError("un usuario normal no puede crear edificios", `select public.crear_edificio('B')`, [], /Solo un administrador/);
+await expectError("ni asignar ubicaciones", `select public.asignar_ubicacion(array['UB-1'], 'B', null)`, [], /Solo un administrador/);
+await expectError("ni cambiarla con update_equipo", `select public.update_equipo('UB-1', '{"edificio":"B"}')`, [], /No tienes permiso/);
+
+await as("admin");
+const edB = (await rows(`select public.crear_edificio(' Edificio  b ') as id`))[0].id;
+check("crea un edificio normalizado", (await edificioId("EDIFICIO B")) === edB);
+await expectError("no permite edificios duplicados", `select public.crear_edificio('edificio b')`, [], /Ya existe/);
+await db.query(`select public.crear_espacio($1, 'Laboratorio 1')`, [edB]);
+await expectError("no permite espacios duplicados en el mismo edificio", `select public.crear_espacio($1, 'LABORATORIO 1')`, [edB], /Ya existe/);
+
+const asignados = (await rows(`select public.asignar_ubicacion(array['UB-1','UB-2','EQ-002'], 'Edificio B', 'laboratorio 1') as n`))[0].n;
+check("la asignación masiva cambia todos los equipos", asignados === 3, String(asignados));
+check("y los deja normalizados", JSON.stringify(await ubicacion("EQ-002")) === '["EDIFICIO B","LABORATORIO 1"]', JSON.stringify(await ubicacion("EQ-002")));
+check("repetirla no cuenta equipos que ya estaban ahí",
+  (await rows(`select public.asignar_ubicacion(array['UB-1'], 'EDIFICIO B', 'LABORATORIO 1') as n`))[0].n === 0);
+
+const renombrados = (await rows(`select public.renombrar_espacio($1, 'Lab de Redes') as n`, [await espacioId("EDIFICIO B", "LABORATORIO 1")]))[0].n;
+check("renombrar un espacio actualiza sus equipos", renombrados === 3 && JSON.stringify(await ubicacion("UB-2")) === '["EDIFICIO B","LAB DE REDES"]');
+await db.query(`select public.renombrar_edificio($1, 'Edificio Central')`, [edB]);
+check("renombrar un edificio actualiza sus equipos", JSON.stringify(await ubicacion("UB-1")) === '["EDIFICIO CENTRAL","LAB DE REDES"]');
+check("conserva sus espacios", Boolean(await espacioId("EDIFICIO CENTRAL", "LAB DE REDES")));
+await expectError("no permite renombrar a un edificio existente", `select public.renombrar_edificio($1, 'Edificio A')`, [edB], /Ya existe/);
+
+await db.query(`select public.eliminar_espacio($1)`, [await espacioId("EDIFICIO CENTRAL", "LAB DE REDES")]);
+check("eliminar un espacio deja sus equipos en el edificio", JSON.stringify(await ubicacion("UB-1")) === '["EDIFICIO CENTRAL",null]');
+await db.query(`select public.eliminar_edificio($1)`, [edB]);
+check("eliminar un edificio deja sus equipos sin edificio", JSON.stringify(await ubicacion("EQ-002")) === "[null,null]");
+check("y lo quita del catálogo", !(await edificioId("EDIFICIO CENTRAL")));
+
+const cambiosUbicacion = (await rows(`select data from public.historial where data->>'tipo' = 'edificio' order by (data->>'registrado_en')::timestamptz, id`)).map((r) => r.data);
+check("registra los cambios en el historial con tipo edificio", JSON.stringify(cambiosUbicacion.map((d) => d.accion)) === JSON.stringify([
+  "EDIFICIO CREADO", "ESPACIO CREADO", "UBICACIÓN ASIGNADA", "ESPACIO RENOMBRADO", "EDIFICIO RENOMBRADO", "ESPACIO ELIMINADO", "EDIFICIO ELIMINADO",
+]), JSON.stringify(cambiosUbicacion.map((d) => d.accion)));
+check("con el autor verificado", cambiosUbicacion.every((d) => d.admin === "Cuenta admin"));
+
+await db.exec(`set role authenticated`);
+await expectError("la app no puede escribir el catálogo directamente", `insert into public.edificios (nombre) values ('X')`, [], /permission denied/);
+await db.exec(`reset role`);
+await as("");
+
+console.log("18. Departamentos / áreas");
+const ubic3 = async (id) => {
+  const [row] = await rows(`select (data->'edificio')::text as e, (data->'espacio')::text as s, (data->'area')::text as a from public.equipos where id = $1`, [id]);
+  return JSON.stringify([row?.e, row?.s, row?.a].map((v) => (v == null ? "(sin clave)" : JSON.parse(v))));
+};
+const areaId = async (edificio, espacio, nombre) =>
+  (await rows(`select a.id from public.areas a join public.espacios s on s.id = a.espacio_id join public.edificios e on e.id = s.edificio_id
+    where e.nombre = $1 and s.nombre = $2 and a.nombre = $3`, [edificio, espacio, nombre]))[0]?.id ?? null;
+
+await as("");
+await db.query(`insert into public.equipos (id, data) values ('AR-1', '{"nombre":"PC","edificio":"Rectoría","espacio":"planta baja","area":" contabilidad "}')`);
+check("normaliza el área al guardar", (await ubic3("AR-1")) === '["RECTORÍA","PLANTA BAJA","CONTABILIDAD"]', await ubic3("AR-1"));
+check("un área nueva se agrega al catálogo", Boolean(await areaId("RECTORÍA", "PLANTA BAJA", "CONTABILIDAD")));
+await db.query(`insert into public.equipos (id, data) values ('AR-2', '{"nombre":"PC","edificio":"Rectoría","espacio":"","area":"Caja"}')`);
+check("sin espacio, el área se borra", (await ubic3("AR-2")) === '["RECTORÍA",null,null]', await ubic3("AR-2"));
+check("y no se agrega al catálogo", (await rows(`select 1 from public.areas where nombre = 'CAJA'`)).length === 0);
+await db.query(`insert into public.equipos (id, data) values ('AR-3', '{"nombre":"PC","edificio":"Rectoría","espacio":"Planta baja"}')`);
+check("los equipos sin clave area no la reciben", (await ubic3("AR-3")) === '["RECTORÍA","PLANTA BAJA","(sin clave)"]', await ubic3("AR-3"));
+await expectError("rechaza un área que no es texto",
+  `insert into public.equipos (id, data) values ('AR-X', '{"edificio":"A","espacio":"B","area":[1]}')`, [], /área debe ser texto/);
+
+await as("usuario");
+await expectError("un usuario normal no puede crear áreas",
+  `select public.crear_area($1, 'X')`, [await espacioId("RECTORÍA", "PLANTA BAJA")], /Solo un administrador/);
+
+await as("admin");
+const espPB = await espacioId("RECTORÍA", "PLANTA BAJA");
+await db.query(`select public.crear_area($1, 'Recursos  humanos')`, [espPB]);
+check("crea un área normalizada", Boolean(await areaId("RECTORÍA", "PLANTA BAJA", "RECURSOS HUMANOS")));
+await expectError("no permite áreas duplicadas en el mismo espacio", `select public.crear_area($1, 'recursos humanos')`, [espPB], /Ya existe/);
+
+const asig = (await rows(`select public.asignar_ubicacion(array['AR-2','AR-3'], 'Rectoría', 'Planta baja', 'Recursos humanos') as n`))[0].n;
+check("la asignación masiva pone el área", asig === 2 && (await ubic3("AR-3")) === '["RECTORÍA","PLANTA BAJA","RECURSOS HUMANOS"]', await ubic3("AR-3"));
+check("sin área (parámetro omitido) la quita",
+  (await rows(`select public.asignar_ubicacion(array['AR-2'], 'Rectoría', 'Planta baja') as n`))[0].n === 1
+  && (await ubic3("AR-2")) === '["RECTORÍA","PLANTA BAJA",null]', await ubic3("AR-2"));
+
+await db.query(`select public.renombrar_area($1, 'Contraloría')`, [await areaId("RECTORÍA", "PLANTA BAJA", "CONTABILIDAD")]);
+check("renombrar un área actualiza sus equipos", (await ubic3("AR-1")) === '["RECTORÍA","PLANTA BAJA","CONTRALORÍA"]', await ubic3("AR-1"));
+await db.query(`select public.renombrar_espacio($1, 'Planta 1')`, [espPB]);
+check("renombrar el espacio conserva el área", (await ubic3("AR-1")) === '["RECTORÍA","PLANTA 1","CONTRALORÍA"]'
+  && Boolean(await areaId("RECTORÍA", "PLANTA 1", "CONTRALORÍA")), await ubic3("AR-1"));
+await db.query(`select public.eliminar_area($1)`, [await areaId("RECTORÍA", "PLANTA 1", "CONTRALORÍA")]);
+check("eliminar un área deja sus equipos en el espacio", (await ubic3("AR-1")) === '["RECTORÍA","PLANTA 1",null]', await ubic3("AR-1"));
+await db.query(`select public.eliminar_espacio($1)`, [espPB]);
+check("eliminar el espacio quita también el área", (await ubic3("AR-3")) === '["RECTORÍA",null,null]', await ubic3("AR-3"));
+check("y borra sus áreas del catálogo", (await rows(`select 1 from public.areas where nombre = 'RECURSOS HUMANOS'`)).length === 0);
+check("registra los cambios de áreas en el historial",
+  (await rows(`select 1 from public.historial where data->>'accion' in ('ÁREA CREADA','ÁREA RENOMBRADA','ÁREA ELIMINADA')`)).length === 3);
+
+await db.exec(`set role authenticated`);
+await expectError("la app no puede escribir áreas directamente", `insert into public.areas (espacio_id, nombre) values ($1, 'X')`, [espPB], /permission denied/);
+await db.exec(`reset role`);
+await as("");
+
 console.log(`\n${passed} correctas, ${failed} fallidas`);
 process.exit(failed ? 1 : 0);
